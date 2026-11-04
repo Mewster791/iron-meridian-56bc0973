@@ -1,23 +1,46 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { ClientOnly, createFileRoute } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
 
-// The home route ships no og:image, so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
+// The game uses WebGL, Web Audio, pointer lock and browser storage, so it only
+// loads in the browser after hydration.
+const IronMeridianGame = lazy(() => import("@/game/App"));
+
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Iron Meridian: Asymmetric Tactical Command" },
+      {
+        name: "description",
+        content:
+          "3D tactical/action hybrid game with 1st/3rd-person POV toggling, cross-faction Scavenge & Retrofit progression, and a multi-biome objective theater.",
+      },
+      { property: "og:title", content: "Iron Meridian: Asymmetric Tactical Command" },
+      {
+        property: "og:description",
+        content:
+          "3D tactical/action hybrid game with 1st/3rd-person POV toggling, cross-faction Scavenge & Retrofit progression, and a multi-biome objective theater.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
+function LoadingScreen() {
+  return (
+    <div className="im-loading">
+      <span className="font-mono">Initializing theater…</span>
+    </div>
+  );
+}
+
 function Index() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <ClientOnly fallback={<LoadingScreen />}>
+      <Suspense fallback={<LoadingScreen />}>
+        <IronMeridianGame />
+      </Suspense>
+    </ClientOnly>
   );
 }
