@@ -2329,12 +2329,10 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
               consumed = true;
               camControllerRef.current.applyCombatImpulse(0.018, 0, 0.08);
               applyIncomingPlayerDamage(combatRef.current, tr.damage, 0.35);
+              d.tookDamage = true;
               if (combatRef.current.hp <= 0) {
-                // Campaign death is a hospital transfer, not a run reset.
-                combatRef.current.hp = 70;
-                combatRef.current.armorIntegrity = 55;
-                combatRef.current.healthStatus = HealthStatus.DAMAGED;
-                _playerPos.set(-132, sampleWalkableHeight(-132, 132), 132);
+                // Going down sends you back to the safehouse; the current step restarts.
+                handlePlayerDown();
                 playerRig.root.position.copy(_playerPos);
               }
             }
@@ -2375,13 +2373,57 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         }
       }
 
-      // I. Proximity Prompts (Crates, Squad APC, Active Objectives)
-      let activePrompt: string | null = null;
+      // Remove fallen enemies (deferred so combat loops never splice mid-iteration).
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        if (!enemies[i].alive) despawnEnemy(enemies[i]);
+      }
+
+      // I. Proximity prompts: mission actions, loot crates, safehouse rest, APC resupply, convoy salvage
+      let activePrompt: string | null = directorPrompt;
+      const gunSpecNow = FACTION_PRIMARY_FIREARMS[factionRef.current];
+
+      if (!activePrompt && playerBuilding) {
+        for (const l of playerBuilding.loot) {
+          if (l.floor !== playerFloor || appliedLooted.has(l.id)) continue;
+          if (Math.hypot(l.x - _playerPos.x, l.z - _playerPos.z) < 1.9) {
+            activePrompt = `Press [E] to search ${LOOT_LABEL[l.kind]}`;
+            if (interactJustPressed) {
+              const reward = rollLootReward(l.kind, Math.random());
+              const c = combatRef.current;
+              c.reserveAmmo = Math.min(gunSpecNow.maxReserveAmmo, c.reserveAmmo + reward.ammo);
+              c.medkitsRemaining = Math.min(c.medkitMax, c.medkitsRemaining + reward.medkits);
+              c.armorIntegrity = Math.min(c.maxArmorIntegrity, c.armorIntegrity + reward.armor);
+              if (reward.ammo > 0) c.autoSwitchedOnZeroAmmo = false;
+              appliedLooted.add(l.id);
+              city.hideLoot(l.id);
+              audioEngine.playReloadClick();
+              callbacksRef.current.onLoot(l.id, reward);
+            }
+            break;
+          }
+        }
+      }
+
+      if (!activePrompt && playerBuilding === safehouse && campaignRef.current.completedMissionIds.includes('m01')) {
+        activePrompt = 'Press [E] to rest at the safehouse — full health, ammo and medkits';
+        if (interactJustPressed) {
+          const c = combatRef.current;
+          c.hp = c.maxHp;
+          c.armorIntegrity = c.maxArmorIntegrity;
+          c.medkitsRemaining = c.medkitMax;
+          c.reserveAmmo = Math.max(c.reserveAmmo, gunSpecNow.initialReserveAmmo);
+          c.healthStatus = HealthStatus.NOMINAL;
+          c.autoSwitchedOnZeroAmmo = false;
+          audioEngine.playMedkitApply();
+          callbacksRef.current.onToast('Rested at Kestrel Row. Fully resupplied.');
+        }
+      }
+
       for (const crate of droppedCrates) {
-        if (crate.collected) continue;
+        if (activePrompt || crate.collected) continue;
         const dist = crate.mesh.position.distanceTo(_playerPos);
         if (dist < 4.8) {
-          activePrompt = 'Press [E] to Salvage Enemy Tech Crate (+ERA Cassettes & Chips)';
+          activePrompt = 'Press [E] to salvage the convoy crate';
           if (interactJustPressed) {
             crate.collected = true;
             crate.mesh.visible = false;
@@ -2393,32 +2435,35 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       }
 
       if (!activePrompt && squadVehicle.root.position.distanceTo(_playerPos) < 5.6) {
-        activePrompt = `Press [E] at ${vehicleRef.current.callsign} APC to Resupply Ammo, Armor & Install Upgrades`;
+        const sinceResupply = simTime - lastResupplyAt;
+        const ready = canResupplyAtApc(sinceResupply);
+        activePrompt = ready
+          ? `Press [E] at ${vehicleRef.current.callsign} to resupply ammo & armor and install upgrades`
+          : `Press [E] at ${vehicleRef.current.callsign} to install upgrades · resupply in ${Math.ceil(APC_RESUPPLY_COOLDOWN_SEC - sinceResupply)} s`;
         if (interactJustPressed) {
-          const gun = FACTION_PRIMARY_FIREARMS[factionRef.current];
-          combatRef.current = {
-            ...combatRef.current,
-            magazineAmmo: gun.magazineCapacity,
-            reserveAmmo: Math.max(combatRef.current.reserveAmmo, gun.initialReserveAmmo),
-            armorIntegrity: 100,
-            medkitsRemaining: STANDARD_MEDICAL_GEAR.maxCharges,
-            autoSwitchedOnZeroAmmo: false,
-          };
+          if (ready) {
+            lastResupplyAt = simTime;
+            combatRef.current = {
+              ...combatRef.current,
+              reserveAmmo: Math.max(combatRef.current.reserveAmmo, gunSpecNow.initialReserveAmmo),
+              armorIntegrity: 100,
+              autoSwitchedOnZeroAmmo: false,
+            };
+          }
           audioEngine.playRetrofitInstall();
-          callbacksRef.current.onQuickRetrofitNextNode();
-        }
-      }
-
-      for (const obj of objectivesRef.current) {
-        if (obj.status === ObjectiveStatus.COMPLETED) continue;
-        const dObj = Math.hypot(obj.worldX - _playerPos.x, obj.worldZ - _playerPos.z);
-        if (dObj < 5.4) {
-          completeObjectiveRef.current(obj.uid);
-          audioEngine.playRetrofitInstall();
+          callbacksRef.current.onQuickRetrofitNextNode(ready);
         }
       }
 
       interactJustPressed = false;
+
+      // Waypoint beam follows the current mission target
+      if (directorWaypoint) {
+        waypointBeam.visible = true;
+        waypointBeam.position.set(directorWaypoint.x, directorWaypoint.y, directorWaypoint.z);
+      } else {
+        waypointBeam.visible = false;
+      }
 
       // Sync React HUD & Minimap at ~15Hz
       uiSyncAccum += Math.max(dt, 0.016);
@@ -2429,7 +2474,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         setVehicleState({ ...vehicleRef.current });
         setNearbyPrompt(activePrompt);
 
-        const pCoords = { x: _playerPos.x, z: _playerPos.z, yaw };
+        const pCoords = { x: _playerPos.x, z: _playerPos.z, y: _playerPos.y, yaw };
         const vCoords = {
           x: squadVehicle.root.position.x,
           z: squadVehicle.root.position.z,
@@ -2442,12 +2487,14 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         setMinimapState({ player: pCoords, vehicle: vCoords, convoy: cCoords });
         callbacksRef.current.onSyncLiveCoords(pCoords, vCoords, cCoords);
 
-        // Project Pinned Waypoint Objective into 3D Screen Space HUD
-        const pinnedObj = pinnedUidRef.current
-          ? objectivesRef.current.find((o) => o.uid === pinnedUidRef.current)
-          : null;
-        if (pinnedObj && pinnedObj.status !== ObjectiveStatus.COMPLETED) {
-          _projPin.set(pinnedObj.worldX, pinnedObj.worldY + 3.2, pinnedObj.worldZ);
+        directorHud.locationLabel = playerBuilding
+          ? `${playerBuilding.name} · Floor ${playerFloor + 1} of ${playerBuilding.floors}`
+          : 'Streets of Varos-Meridian';
+        setMissionHud({ ...directorHud });
+        setMapWaypoint(directorWaypoint ? { x: directorWaypoint.x, z: directorWaypoint.z } : null);
+
+        if (directorWaypoint) {
+          _projPin.set(directorWaypoint.x, directorWaypoint.y + 2.4, directorWaypoint.z);
           const distM = Math.round(_projPin.distanceTo(_playerPos));
           _projPin.project(camera);
           const inFront = _projPin.z < 1.0;
@@ -2458,7 +2505,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
             xPct,
             yPct,
             distMeters: distM,
-            title: pinnedObj.title,
+            title: directorHud.stepText,
           });
         } else {
           setPinnedHudProj((prev) => (prev.visible ? { ...prev, visible: false } : prev));
