@@ -1472,7 +1472,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         }
       }
 
-      // Handle Fast-Deploy Request from M Tactical Map Menu (with solid obstacle push-out)
+      // Tester panel actions
       const tCmd = testerCmdRef.current;
       if (tCmd && tCmd.nonce !== processedTesterNonce) {
         processedTesterNonce = tCmd.nonce;
@@ -1495,6 +1495,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         }
       }
 
+      // Handle Fast-Deploy Request from M Tactical Map Menu (with solid obstacle push-out)
       if (deployReqRef.current && deployReqRef.current.nonce !== processedDeployNonce) {
         processedDeployNonce = deployReqRef.current.nonce;
         const pDep = {
