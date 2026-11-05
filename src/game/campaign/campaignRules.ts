@@ -120,6 +120,36 @@ export function completeCurrentStep(p: CampaignProgress): StepAdvanceResult {
   };
 }
 
+/**
+ * Tester shortcut: progress as if every mission before `missionIndex` was played.
+ * Earlier bomb targets stay destroyed; loot, dossiers, deaths and play time are kept.
+ */
+export function jumpToMission(p: CampaignProgress, missionIndex: number): CampaignProgress {
+  const idx = Math.max(0, Math.min(MISSIONS.length, Math.floor(missionIndex)));
+  const before = MISSIONS.slice(0, idx);
+  const destroyed = new Set<string>();
+  for (const m of before) {
+    for (const s of m.steps) if (s.type === 'DETONATE' && s.buildingId) destroyed.add(s.buildingId);
+  }
+  return {
+    ...p,
+    missionIndex: idx,
+    stepIndex: 0,
+    briefingSeen: false,
+    clearedFloors: [],
+    completedMissionIds: before.map((m) => m.id),
+    destroyedBuildingIds: [...destroyed],
+  };
+}
+
+/** Tester shortcut: jump to a step inside the current mission. */
+export function jumpToStep(p: CampaignProgress, stepIndex: number): CampaignProgress {
+  const m = getCurrentMission(p);
+  if (!m) return p;
+  const idx = Math.max(0, Math.min(m.steps.length - 1, Math.floor(stepIndex)));
+  return { ...p, stepIndex: idx, clearedFloors: [], briefingSeen: true };
+}
+
 /** Going down costs scrap and a walk back from the safehouse; cleared floors are kept as checkpoints. */
 export function applyDeath(p: CampaignProgress, scrap: number): { progress: CampaignProgress; scrapAfter: number; scrapLost: number } {
   const scrapLost = Math.floor(scrap * DEATH_SCRAP_PENALTY);
