@@ -165,6 +165,8 @@ interface EnemyActor {
   patrolPhase: number;
   alive: boolean;
   respawnTimer: number;
+  losTimer: number;
+  hasLos: boolean;
 }
 
 interface TracerBolt {
@@ -537,7 +539,13 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     // 5. Build All Faction-Dependent Actors (Player, 1st-Person Rig, Squad APC, Squad Riflemen, Enemy Convoy Column & Patrols)
     let currentBuiltFaction = factionRef.current;
     let playerRig: OperatorRigRefs = buildOperatorModel(currentBuiltFaction, false);
-    _playerPos.set(0, sampleWalkableHeight(0, -10), -10);
+    const safehouse = cityLayout.byId.get('safehouse')!;
+    const safeEntrance = getBuildingEntrance(safehouse);
+    const safeRespawn = {
+      x: (safehouse.rooms[0].minX + safehouse.rooms[0].maxX) / 2,
+      z: (safehouse.rooms[0].minZ + safehouse.rooms[0].maxZ) / 2,
+    };
+    _playerPos.set(safeEntrance.x, 0, safeEntrance.z + (safehouse.doorSide === 'N' ? -2 : 2));
     playerRig.root.position.copy(_playerPos);
     scene.add(playerRig.root);
 
@@ -557,7 +565,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     scene.add(shadowDisc);
 
     let squadVehicle: CommandVehicleRefs = buildSquadCommandVehicle(currentBuiltFaction, matLib);
-    const vehPos = new THREE.Vector3(-7.5, sampleWalkableHeight(-7.5, -14), -14);
+    const vehPos = new THREE.Vector3(safeEntrance.x + 6, 0, safeEntrance.z + (safehouse.doorSide === 'N' ? -6 : 6));
     staticPhysics.resolveHorizontalBody(vehPos, vehPos.y, 2.8, 1.85);
     vehPos.y = sampleWalkableHeight(vehPos.x, vehPos.z);
     squadVehicle.root.position.copy(vehPos);
@@ -589,46 +597,510 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     scene.add(convoyLeadEscort.root, convoyTruckMesh, convoyRearEscort.root);
     collidableEnvironment.push(convoyLeadEscort.root, convoyTruckMesh, convoyRearEscort.root);
 
-    let convoyX = -55;
-    let convoyHp = 280;
+    const CONVOY_MAX_HP = 520;
+    let simTime = 0;
+    let lastResupplyAt = -APC_RESUPPLY_COOLDOWN_SEC;
+    let convoyX = -120;
+    let convoyHp = CONVOY_MAX_HP;
     let convoyDestroyedCooldown = 0;
+    let convoyKilledThisFrame = false;
 
+    // ---- Enemy actors (street patrols, building garrisons, guards, high-value targets, assault waves) ----
     const enemies: EnemyActor[] = [];
-    const enemySpawnOffsets = [
-      new THREE.Vector3(-12, 0, -24),
-      new THREE.Vector3(4, 0, -31),
-      new THREE.Vector3(31, 0, -33),
-      new THREE.Vector3(-28, 0, -21),
-      new THREE.Vector3(44, 0, -49),
-      new THREE.Vector3(-51, 0, 35),
-      new THREE.Vector3(10, 0, -88),
-    ];
+    let enemySerial = 0;
+    const currentAct = () => (getCurrentMission(campaignRef.current)?.act ?? 3) as 1 | 2 | 3;
 
-    const rebuildEnemyActors = (eFac: FactionId) => {
-      enemies.forEach((e) => scene.remove(e.rig.root));
-      enemies.length = 0;
-      enemySpawnOffsets.forEach((pt, idx) => {
-        const eRig = buildOperatorModel(eFac, true);
-        const spawnXZ = { x: pt.x, z: pt.z };
-        const initialY = sampleWalkableHeight(spawnXZ.x, spawnXZ.z);
-        staticPhysics.resolveHorizontalBody(spawnXZ, initialY, 1.75, 0.55);
-        const ey = sampleWalkableHeight(spawnXZ.x, spawnXZ.z);
-        eRig.root.position.set(spawnXZ.x, ey, spawnXZ.z);
-        scene.add(eRig.root);
-        enemies.push({
-          id: `enemy-${idx}`,
-          rig: eRig,
-          hp: 100,
-          maxHp: 100,
-          fireTimer: 1.2 + idx * 0.4,
-          patrolOrigin: new THREE.Vector3(spawnXZ.x, ey, spawnXZ.z),
-          patrolPhase: idx * 1.15,
-          alive: true,
-          respawnTimer: 0,
-        });
+    const spawnEnemy = (spec: {
+      kind: EnemyKind;
+      x: number;
+      z: number;
+      y: number;
+      bounds: Rect | null;
+      floor: number;
+      hp?: number;
+      damage?: number;
+      chase?: boolean;
+      scale?: number;
+    }): EnemyActor => {
+      const act = currentAct();
+      const rig = buildOperatorModel(enemyFaction, true);
+      if (spec.scale) rig.root.scale.setScalar(spec.scale);
+      const pos = { x: spec.x, z: spec.z };
+      staticPhysics.resolveHorizontalBody(pos, spec.y, 1.75, 0.45);
+      rig.root.position.set(pos.x, spec.y, pos.z);
+      scene.add(rig.root);
+      const hp = spec.hp ?? ENEMY_HP_BY_ACT[act];
+      const e: EnemyActor = {
+        kind: spec.kind,
+        floorY: spec.y,
+        bounds: spec.bounds,
+        floor: spec.floor,
+        damage: spec.damage ?? ENEMY_DAMAGE_BY_ACT[act],
+        chase: spec.chase ?? false,
+        id: `enemy-${enemySerial++}`,
+        rig,
+        hp,
+        maxHp: hp,
+        fireTimer: 1.0 + Math.random() * 1.6,
+        patrolOrigin: new THREE.Vector3(pos.x, spec.y, pos.z),
+        patrolPhase: Math.random() * 6,
+        alive: true,
+        respawnTimer: 0,
+        losTimer: Math.random() * 0.3,
+        hasLos: false,
+      };
+      enemies.push(e);
+      return e;
+    };
+
+    const disposeRig = (root: THREE.Object3D) => {
+      root.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh) {
+          m.geometry?.dispose();
+          const mat = m.material as THREE.Material | THREE.Material[];
+          if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
+          else mat?.dispose();
+        }
       });
     };
-    rebuildEnemyActors(enemyFaction);
+
+    const despawnEnemy = (e: EnemyActor) => {
+      scene.remove(e.rig.root);
+      disposeRig(e.rig.root);
+      const idx = enemies.indexOf(e);
+      if (idx !== -1) enemies.splice(idx, 1);
+    };
+
+    // Street patrols hold intersections and respawn slowly once you are out of sight.
+    const streetSlots: Array<{ x: number; z: number; enemy: EnemyActor | null; respawn: number }> = [];
+    for (let i = 1; i < BLOCKS_PER_SIDE; i += 2) {
+      for (let j = 0; j < BLOCKS_PER_SIDE; j++) {
+        const x = blockCenter(i) - 26;
+        const z = blockCenter(j) + 8;
+        if (Math.hypot(x - safeEntrance.x, z - safeEntrance.z) < 55) continue;
+        streetSlots.push({ x, z, enemy: null, respawn: 0 });
+      }
+    }
+    const streetSlotOf = new Map<EnemyActor, number>();
+
+    // ---- Mission director: turns the current campaign step into enemies, prompts and completion ----
+    interface FloorRuntime {
+      remaining: number;
+      visited: boolean;
+      cleared: boolean;
+      actors: EnemyActor[];
+    }
+    const d = {
+      key: '',
+      step: null as MissionStep | null,
+      building: null as Building | null,
+      floors: [] as FloorRuntime[],
+      guardsRemaining: 0,
+      guardActors: [] as EnemyActor[],
+      guardsSpawned: false,
+      hvt: null as EnemyActor | null,
+      hvtDown: false,
+      hold: 0,
+      defendElapsed: 0,
+      waveTimer: 0,
+      completeSent: false,
+      deathNonce: 0,
+      tookDamage: false,
+      escortsSpawned: false,
+    };
+
+    const despawnMissionEnemies = () => {
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        if (enemies[i].kind !== 'STREET') despawnEnemy(enemies[i]);
+      }
+    };
+
+    const setupStep = () => {
+      despawnMissionEnemies();
+      const p = campaignRef.current;
+      const step = getCurrentStep(p);
+      d.step = step;
+      d.building = getStepBuilding(step);
+      d.floors = [];
+      d.guardsRemaining = step?.guards ?? 0;
+      d.guardActors = [];
+      d.guardsSpawned = false;
+      d.hvt = null;
+      d.hvtDown = false;
+      d.hold = 0;
+      d.defendElapsed = 0;
+      d.waveTimer = 4;
+      d.completeSent = false;
+      d.escortsSpawned = false;
+      bombGroup.visible = false;
+      if (!step) return;
+      const b = d.building;
+      if (step.type === 'CLEAR_BUILDING' && b) {
+        for (let f = 0; f < b.floors; f++) {
+          const cleared = p.clearedFloors.includes(f);
+          d.floors.push({
+            remaining: cleared ? 0 : (step.enemiesPerFloor ?? 3) + (f === b.floors - 1 ? 1 : 0),
+            visited: cleared,
+            cleared,
+            actors: [],
+          });
+        }
+      }
+      if (step.type === 'DETONATE' && b) {
+        const mission = getCurrentMission(p);
+        const plantStep = mission?.steps[p.stepIndex - 1];
+        const spot = getActionSpot(b);
+        bombGroup.position.set(spot.x, floorY(plantStep?.floor ?? 0), spot.z);
+        bombGroup.visible = true;
+      }
+      if (step.type === 'DESTROY_CONVOY') {
+        convoyHp = CONVOY_MAX_HP;
+        convoyX = -130;
+        convoyDestroyedCooldown = 0;
+      }
+    };
+
+    const completeStep = () => {
+      if (d.completeSent) return;
+      d.completeSent = true;
+      audioEngine.playRetrofitInstall();
+      callbacksRef.current.onStepComplete();
+    };
+
+    const onEnemyKilled = (e: EnemyActor) => {
+      if (e.kind === 'FLOOR') {
+        const fr = d.floors[e.floor];
+        if (fr) {
+          fr.remaining = Math.max(0, fr.remaining - 1);
+          fr.actors = fr.actors.filter((a) => a !== e);
+        }
+      } else if (e.kind === 'GUARD') {
+        d.guardsRemaining = Math.max(0, d.guardsRemaining - 1);
+        d.guardActors = d.guardActors.filter((a) => a !== e);
+      } else if (e.kind === 'HVT') {
+        d.hvtDown = true;
+        d.hvt = null;
+        callbacksRef.current.onToast(`${d.step?.targetName ?? 'Target'} eliminated`);
+      } else if (e.kind === 'STREET') {
+        const slot = streetSlotOf.get(e);
+        if (slot !== undefined) {
+          streetSlots[slot].enemy = null;
+          streetSlots[slot].respawn = 120;
+        }
+        streetSlotOf.delete(e);
+      }
+    };
+
+    const killEnemy = (e: EnemyActor) => {
+      if (!e.alive) return;
+      e.alive = false;
+      e.rig.root.visible = false;
+      onEnemyKilled(e);
+    };
+
+    const handlePlayerDown = () => {
+      combatRef.current.hp = 70;
+      combatRef.current.armorIntegrity = 50;
+      combatRef.current.healthStatus = HealthStatus.DAMAGED;
+      _playerPos.set(safeRespawn.x, 0, safeRespawn.z);
+      verticalVel = 0;
+      d.deathNonce++;
+      callbacksRef.current.onPlayerDown();
+    };
+
+    const wavePoints = (cx: number, cz: number): Array<{ x: number; z: number }> => {
+      const pts: Array<{ x: number; z: number }> = [];
+      for (const t of [-48, -24, 24, 48]) {
+        pts.push({ x: cx - 27, z: cz + t }, { x: cx + 27, z: cz + t }, { x: cx + t, z: cz - 27 }, { x: cx + t, z: cz + 27 });
+      }
+      return pts;
+    };
+
+    const LOOT_LABEL: Record<string, string> = {
+      AMMO: 'the ammo crate',
+      MEDKIT: 'the medical case',
+      SALVAGE: 'the salvage box',
+      ARMOR: 'the armor locker',
+      DOSSIER: 'the document case',
+    };
+
+    let directorPrompt: string | null = null;
+    let directorWaypoint: { x: number; y: number; z: number } | null = null;
+    const directorHud: MissionHudState = {
+      missionLabel: '',
+      stepText: '',
+      detail: '',
+      progress: null,
+      locationLabel: '',
+    };
+
+    const updateDirector = (
+      dt: number,
+      playerBuilding: Building | null,
+      playerFloor: number,
+      interactHeld: boolean,
+      detonatePressed: boolean
+    ) => {
+      const p = campaignRef.current;
+      const key = `${p.missionIndex}:${p.stepIndex}:${d.deathNonce}:${enemyFaction}`;
+      if (key !== d.key) {
+        d.key = key;
+        setupStep();
+      }
+      directorPrompt = null;
+      directorWaypoint = null;
+      actionRing.visible = false;
+      const mission = getCurrentMission(p);
+      const step = d.step;
+      directorHud.missionLabel = mission ? `Mission ${mission.number} · ${mission.title}` : 'Campaign complete';
+      directorHud.stepText = step ? step.text : 'Varos-Meridian is free. Explore and loot at will.';
+      directorHud.detail = '';
+      directorHud.progress = null;
+      if (!step || d.completeSent) {
+        d.tookDamage = false;
+        return;
+      }
+      const b = d.building;
+      const px = _playerPos.x;
+      const pz = _playerPos.z;
+      const bCenter = b
+        ? { x: (b.footprint.minX + b.footprint.maxX) / 2, z: (b.footprint.minZ + b.footprint.maxZ) / 2 }
+        : null;
+      const distToB = bCenter ? Math.hypot(bCenter.x - px, bCenter.z - pz) : Infinity;
+      const inB = !!b && playerBuilding === b;
+
+      switch (step.type) {
+        case 'TRAVEL':
+        case 'RETURN_SAFEHOUSE': {
+          const wp = getStepWaypoint(step);
+          if (wp) {
+            directorWaypoint = wp;
+            const dist = Math.hypot(wp.x - px, wp.z - pz);
+            directorHud.detail = `${Math.round(dist)} m away`;
+            const reached = step.zone ? dist < step.zone.radius : inB || dist < 7;
+            if (reached) completeStep();
+          }
+          break;
+        }
+        case 'CLEAR_BUILDING': {
+          if (!b) break;
+          const near = distToB < 75;
+          const active = new Set<number>();
+          if (near) {
+            if (inB) {
+              active.add(playerFloor - 1);
+              active.add(playerFloor);
+              active.add(playerFloor + 1);
+            } else {
+              active.add(0);
+              active.add(1);
+            }
+          }
+          d.floors.forEach((fr, f) => {
+            if (active.has(f) && fr.actors.length === 0 && fr.remaining > 0) {
+              const posts = getFloorPosts(b, f, fr.remaining);
+              for (const post of posts) {
+                fr.actors.push(spawnEnemy({ kind: 'FLOOR', x: post.x, z: post.z, y: floorY(f), bounds: post.room, floor: f }));
+              }
+            } else if (!active.has(f) && fr.actors.length > 0) {
+              fr.actors.forEach((a) => despawnEnemy(a));
+              fr.actors = [];
+            }
+          });
+          if (inB && d.floors[playerFloor]) d.floors[playerFloor].visited = true;
+          let clearedCount = 0;
+          d.floors.forEach((fr, f) => {
+            if (!fr.cleared && isFloorCleared(fr.remaining, fr.visited)) {
+              fr.cleared = true;
+              callbacksRef.current.onFloorCleared(f);
+              const n = d.floors.filter((x) => x.cleared).length;
+              callbacksRef.current.onToast(`Floor ${f + 1} clear — ${n}/${d.floors.length} floors secured`);
+            }
+            if (fr.cleared) clearedCount++;
+          });
+          directorHud.progress = clearedCount / Math.max(1, d.floors.length);
+          const here = inB ? d.floors[playerFloor] : null;
+          directorHud.detail =
+            `Floors cleared ${clearedCount}/${d.floors.length}` +
+            (here ? ` · This floor: ${here.remaining > 0 ? `${here.remaining} hostiles` : 'clear'}` : '');
+          if (clearedCount >= d.floors.length) {
+            callbacksRef.current.onToast(`${b.name} taken`);
+            completeStep();
+            break;
+          }
+          const nextFloor = d.floors.findIndex((fr) => !fr.cleared);
+          if (inB) {
+            directorWaypoint = bCenter ? { x: bCenter.x, z: bCenter.z, y: floorY(Math.max(0, nextFloor)) } : null;
+          } else {
+            const e = getBuildingEntrance(b);
+            directorWaypoint = { x: e.x, z: e.z, y: 0 };
+          }
+          break;
+        }
+        case 'PLANT_BOMB':
+        case 'RETRIEVE':
+        case 'ELIMINATE': {
+          if (!b) break;
+          const F = step.floor ?? 0;
+          if (distToB < 75 && !d.guardsSpawned && d.guardsRemaining > 0) {
+            d.guardsSpawned = true;
+            const posts = getFloorPosts(b, F, d.guardsRemaining);
+            d.guardActors = posts.map((post) =>
+              spawnEnemy({ kind: 'GUARD', x: post.x, z: post.z, y: floorY(F), bounds: post.room, floor: F })
+            );
+          } else if (distToB > 115 && d.guardsSpawned) {
+            d.guardActors.forEach((a) => despawnEnemy(a));
+            d.guardActors = [];
+            d.guardsSpawned = false;
+          }
+          if (step.type === 'ELIMINATE') {
+            if (distToB < 75 && !d.hvt && !d.hvtDown) {
+              const room = b.rooms[b.rooms.length - 1];
+              d.hvt = spawnEnemy({
+                kind: 'HVT',
+                x: (room.minX + room.maxX) / 2,
+                z: (room.minZ + room.maxZ) / 2,
+                y: floorY(F),
+                bounds: room,
+                floor: F,
+                hp: step.targetHp ?? 400,
+                damage: ENEMY_DAMAGE_BY_ACT[currentAct()] + 6,
+                scale: 1.12,
+              });
+            } else if (distToB > 115 && d.hvt) {
+              despawnEnemy(d.hvt);
+              d.hvt = null;
+            }
+            if (d.hvtDown) {
+              completeStep();
+              break;
+            }
+            const hpPct = d.hvt ? Math.round((d.hvt.hp / d.hvt.maxHp) * 100) : 100;
+            directorHud.detail = `${step.targetName ?? 'Target'} · Floor ${F + 1} · ${hpPct}% health${d.guardsRemaining > 0 ? ` · ${d.guardsRemaining} bodyguards` : ''}`;
+            directorWaypoint = d.hvt
+              ? { x: d.hvt.rig.root.position.x, y: d.hvt.rig.root.position.y, z: d.hvt.rig.root.position.z }
+              : bCenter
+                ? { x: bCenter.x, z: bCenter.z, y: floorY(F) }
+                : null;
+            break;
+          }
+          const spot = getActionSpot(b);
+          actionRing.visible = true;
+          actionRing.position.set(spot.x, floorY(F) + 0.04, spot.z);
+          directorWaypoint = inB ? { x: spot.x, y: floorY(F), z: spot.z } : { ...getBuildingEntrance(b), y: 0 };
+          const onFloor = inB && playerFloor === F;
+          const distSpot = Math.hypot(spot.x - px, spot.z - pz);
+          const holdSec = step.holdSec ?? 8;
+          const verb = step.type === 'PLANT_BOMB' ? 'plant the charge' : 'work';
+          if (onFloor && distSpot < 2.4) {
+            if (!canStartHoldAction(d.guardsRemaining)) {
+              directorPrompt = `Clear the ${d.guardsRemaining} guard${d.guardsRemaining === 1 ? '' : 's'} on this floor first`;
+            } else {
+              d.hold = stepHoldProgress(d.hold, dt, interactHeld, d.tookDamage);
+              directorPrompt = `Hold [E] to ${verb} — ${Math.min(100, Math.round((d.hold / holdSec) * 100))}%`;
+              if (d.hold >= holdSec) {
+                if (step.type === 'PLANT_BOMB') {
+                  bombGroup.position.set(spot.x, floorY(F), spot.z);
+                  bombGroup.visible = true;
+                  callbacksRef.current.onToast('Charge planted. Get clear!');
+                }
+                completeStep();
+              }
+            }
+          } else {
+            d.hold = stepHoldProgress(d.hold, dt, false, d.tookDamage);
+          }
+          directorHud.progress = d.hold > 0 ? Math.min(1, d.hold / holdSec) : null;
+          directorHud.detail = `Floor ${F + 1}${d.guardsRemaining > 0 ? ` · ${d.guardsRemaining} guards remain` : ' · guards down'}${
+            !onFloor && inB ? ` · you are on floor ${playerFloor + 1}` : ''
+          }`;
+          break;
+        }
+        case 'DETONATE': {
+          if (!b) break;
+          const dist = Math.hypot(bombGroup.position.x - px, bombGroup.position.z - pz);
+          const safe = step.safeDistance ?? 50;
+          directorWaypoint = { x: bombGroup.position.x, y: bombGroup.position.y, z: bombGroup.position.z };
+          bombLight.visible = Math.floor(simTime * 3) % 2 === 0;
+          if (canDetonate(dist, safe)) {
+            directorPrompt = 'Press [G] to detonate';
+            directorHud.detail = `${Math.round(dist)} m from the charge — safe`;
+            if (detonatePressed) {
+              audioEngine.playExplosion();
+              window.setTimeout(() => audioEngine.playExplosion(), 260);
+              camControllerRef.current.applyCombatImpulse(0.06, 0, 0.5);
+              const fp = b.footprint;
+              for (let k = 0; k < 9; k++) {
+                _tmpVecC.set(
+                  fp.minX + Math.random() * (fp.maxX - fp.minX),
+                  Math.random() * floorY(b.floors),
+                  fp.minZ + Math.random() * (fp.maxZ - fp.minZ)
+                );
+                spawnImpactSparks(_tmpVecC, 14, true);
+              }
+              bombGroup.visible = false;
+              city.setBuildingDestroyed(b);
+              appliedDestroyed.add(b.id);
+              callbacksRef.current.onBuildingDestroyed(b.id);
+              completeStep();
+            }
+          } else {
+            directorHud.detail = `Too close: ${Math.round(dist)} / ${safe} m`;
+            directorHud.progress = dist / safe;
+          }
+          break;
+        }
+        case 'DEFEND': {
+          const z = step.zone;
+          if (!z) break;
+          const dist = Math.hypot(z.x - px, z.z - pz);
+          const inside = dist < z.radius;
+          d.defendElapsed = stepDefendTimer(d.defendElapsed, dt, inside);
+          d.waveTimer -= dt;
+          const waveAlive = enemies.filter((e) => e.kind === 'WAVE' && e.alive).length;
+          if (d.waveTimer <= 0) {
+            d.waveTimer = 13;
+            if (waveAlive < 10) {
+              const pts = wavePoints(z.x, z.z).filter((pt) => Math.hypot(pt.x - px, pt.z - pz) > 26);
+              for (let k = 0; k < 3 && pts.length > 0; k++) {
+                const pt = pts.splice(Math.floor(Math.random() * pts.length), 1)[0];
+                spawnEnemy({ kind: 'WAVE', x: pt.x, z: pt.z, y: 0, bounds: null, floor: 0, chase: true });
+              }
+            }
+          }
+          const total = step.durationSec ?? 120;
+          directorHud.progress = Math.min(1, d.defendElapsed / total);
+          directorHud.detail = `Hold for ${Math.max(0, Math.ceil(total - d.defendElapsed))} s${inside ? '' : ' · back inside the plaza — clock paused'}`;
+          directorWaypoint = { x: z.x, y: 0, z: z.z };
+          if (d.defendElapsed >= total) {
+            for (let i = enemies.length - 1; i >= 0; i--) {
+              if (enemies[i].kind === 'WAVE') despawnEnemy(enemies[i]);
+            }
+            completeStep();
+          }
+          break;
+        }
+        case 'DESTROY_CONVOY': {
+          const cz = getHighwayCenterZ(convoyX);
+          if (!d.escortsSpawned && convoyHp > 0 && Math.hypot(convoyX - px, cz - pz) < 70) {
+            d.escortsSpawned = true;
+            for (let k = 0; k < 4; k++) {
+              spawnEnemy({ kind: 'WAVE', x: convoyX - 8 + k * 5, z: cz - 6.5, y: 0, bounds: null, floor: 0, chase: true });
+            }
+          }
+          if (convoyKilledThisFrame) {
+            completeStep();
+            break;
+          }
+          directorHud.progress = convoyHp > 0 ? 1 - convoyHp / CONVOY_MAX_HP : null;
+          directorHud.detail = convoyHp > 0 ? `Convoy armor ${Math.round((convoyHp / CONVOY_MAX_HP) * 100)}%` : 'Convoy regrouping…';
+          directorWaypoint = { x: convoyX, y: 0, z: cz };
+          break;
+        }
+      }
+      d.tookDamage = false;
+    };
 
     const droppedCrates: DroppedCrate[] = [];
     const registerCrateCollider = (id: string, cx: number, cy: number, cz: number) => {
@@ -645,14 +1117,6 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       });
     };
 
-    const starterCrateMesh = buildSalvageTechCrate();
-    const scPos = { x: 8, z: -23 };
-    staticPhysics.resolveHorizontalBody(scPos, sampleWalkableHeight(scPos.x, scPos.z), 1.0, 0.9);
-    const scY = sampleWalkableHeight(scPos.x, scPos.z);
-    starterCrateMesh.position.set(scPos.x, scY, scPos.z);
-    scene.add(starterCrateMesh);
-    registerCrateCollider('crate-initial', scPos.x, scY, scPos.z);
-    droppedCrates.push({ id: 'crate-initial', mesh: starterCrateMesh, collected: false });
 
     // 6. Dual-Ray Ballistic Convergence Visualizer Lines & Impact Particle Pool
     const sightRayGeo = new THREE.BufferGeometry().setFromPoints(_sightLinePts);
