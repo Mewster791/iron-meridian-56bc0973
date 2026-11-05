@@ -809,6 +809,23 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       callbacksRef.current.onPlayerDown();
     };
 
+    // Dev-only test hook (stripped from production builds).
+    if (import.meta.env.DEV) {
+      (window as unknown as { __game?: unknown }).__game = {
+        teleport: (x: number, z: number, y = 0) => {
+          _playerPos.set(x, sampleCitySupport(x, z, y), z);
+          verticalVel = 0;
+        },
+        state: () => ({
+          player: { x: _playerPos.x, y: _playerPos.y, z: _playerPos.z },
+          hp: combatRef.current.hp,
+          enemies: enemies.filter((e) => e.alive).map((e) => ({ kind: e.kind, x: e.rig.root.position.x, y: e.rig.root.position.y, z: e.rig.root.position.z })),
+          hud: { ...directorHud },
+        }),
+        building: (id: string) => cityLayout.byId.get(id),
+      };
+    }
+
     const wavePoints = (cx: number, cz: number): Array<{ x: number; z: number }> => {
       const pts: Array<{ x: number; z: number }> = [];
       for (const t of [-48, -24, 24, 48]) {
