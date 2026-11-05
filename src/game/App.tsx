@@ -39,8 +39,14 @@ import {
   createInitialCampaignProgress,
   formatPlayTime,
   getCurrentMission,
+  jumpToMission,
+  jumpToStep,
   markFloorCleared,
 } from './campaign/campaignRules';
+import type { TesterCommandType } from './components/TacticalArena3D';
+import { TesterPanel, TesterPasswordPrompt } from './tester/TesterPanel';
+import { initialTesterCodeState, stepTesterCode } from './tester/testerAccess';
+import { getTesterTeleportTarget } from './tester/testerTargets';
 
 type Coords = { x: number; z: number; y: number; yaw: number };
 
@@ -86,6 +92,13 @@ export default function App() {
 
   const { user, ready: accountReady } = usePlayerAccount();
   const [cloudStatus, setCloudStatus] = useState<string | null>(null);
+
+  // ---- hidden tester panel (Control, then 94206722, then the "color" password) ----
+  const [testerStage, setTesterStage] = useState<'closed' | 'password' | 'panel'>('closed');
+  const [testerGodMode, setTesterGodMode] = useState(false);
+  const [testerCommand, setTesterCommand] = useState<{ type: TesterCommandType; nonce: number } | null>(null);
+  const testerStageRef = useRef(testerStage);
+  testerStageRef.current = testerStage;
 
   const [toastBanner, setToastBanner] = useState<string | null>(null);
   const showToast = useCallback((msg: string) => {
@@ -217,7 +230,7 @@ export default function App() {
   }, [isRoundActive, saveNow]);
 
   const showBriefing = isRoundActive && (debrief !== null || (!campaign.briefingSeen && getCurrentMission(campaign) !== null));
-  const simPaused = isMenuOpen || showBriefing;
+  const simPaused = isMenuOpen || showBriefing || testerStage !== 'closed';
 
   // Play-time clock (only while actually playing).
   useEffect(() => {
@@ -231,7 +244,7 @@ export default function App() {
   // Global keys: M toggles the menu, Escape closes it.
   useEffect(() => {
     const onGlobalKeyDown = (e: KeyboardEvent) => {
-      if (!roundActiveRef.current || e.repeat) return;
+      if (!roundActiveRef.current || e.repeat || testerStageRef.current !== 'closed') return;
       if (document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
       if (e.code === 'KeyM') {
         e.preventDefault();
@@ -246,6 +259,23 @@ export default function App() {
     };
     window.addEventListener('keydown', onGlobalKeyDown);
     return () => window.removeEventListener('keydown', onGlobalKeyDown);
+  }, []);
+
+  // Listen for the tester unlock sequence anywhere (home screen or in a mission).
+  useEffect(() => {
+    let codeState = initialTesterCodeState;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || testerStageRef.current !== 'closed') return;
+      if (document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+      const r = stepTesterCode(codeState, e.key, performance.now());
+      codeState = r.state;
+      if (r.unlocked) {
+        if (document.pointerLockElement) document.exitPointerLock?.();
+        setTesterStage('password');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   // ---- home screen ----
@@ -432,6 +462,59 @@ export default function App() {
     []
   );
 
+  // ---- tester panel actions ----
+  const closeTester = useCallback(() => setTesterStage('closed'), []);
+
+  const testerFinishMission = useCallback(() => {
+    const p = campaignRef.current;
+    const m = getCurrentMission(p);
+    if (!m) return;
+    const bombed = m.steps.filter((s) => s.type === 'DETONATE' && s.buildingId).map((s) => s.buildingId as string);
+    setCampaign({
+      ...p,
+      stepIndex: m.steps.length - 1,
+      clearedFloors: [],
+      destroyedBuildingIds: [...new Set([...p.destroyedBuildingIds, ...bombed])],
+    });
+    handleStepComplete();
+  }, [handleStepComplete, setCampaign]);
+
+  const testerJumpMission = useCallback((index: number) => {
+    setCampaign(jumpToMission(campaignRef.current, index));
+    coordsRef.current = { x: 0, z: 0, y: 0, yaw: 0 };
+    setSquadTargetCoords(null);
+    setDebrief(null);
+    setDeployRequest(null);
+    setWorldKey((k) => k + 1);
+    setCampaignLive(true);
+    setIsMenuOpen(false);
+    setIsRoundActive(true);
+    setTesterStage('closed');
+  }, [setCampaign]);
+
+  const testerJumpStep = useCallback((index: number) => {
+    setDebrief(null);
+    setCampaign(jumpToStep(campaignRef.current, index));
+  }, [setCampaign]);
+
+  const testerTeleport = useCallback(() => {
+    const target = getTesterTeleportTarget(campaignRef.current, liveConvoyCoords);
+    if (!target) return;
+    setDeployRequest({ ...target, nonce: Date.now() });
+    setTesterStage('closed');
+  }, [liveConvoyCoords]);
+
+  const testerAddSalvage = useCallback(() => {
+    setSalvageInventory((inv) => ({
+      ...inv,
+      rawScrapAlloy: inv.rawScrapAlloy + 200,
+      westernCompositePlates: inv.westernCompositePlates + 5,
+      easternEraBlocks: inv.easternEraBlocks + 5,
+      encryptedFireControlChips: inv.encryptedFireControlChips + 3,
+    }));
+    showToast('Tester: salvage added');
+  }, [showToast]);
+
   const nextMission = getCurrentMission(campaign);
   const campaignForUi = isMenuOpen ? { ...campaign, playTimeSec: Math.floor(playTimeRef.current) } : campaign;
 
@@ -453,6 +536,27 @@ export default function App() {
           cloudStatus={cloudStatus}
           onSignIn={handleSignIn}
           onSignOut={handleSignOut}
+        />
+      )}
+
+      {testerStage === 'password' && (
+        <TesterPasswordPrompt onSubmit={() => setTesterStage('panel')} onCancel={closeTester} />
+      )}
+
+      {testerStage === 'panel' && (
+        <TesterPanel
+          campaign={campaign}
+          inGame={isRoundActive}
+          godMode={testerGodMode}
+          onClose={closeTester}
+          onCompleteStep={handleStepComplete}
+          onFinishMission={testerFinishMission}
+          onJumpMission={testerJumpMission}
+          onJumpStep={testerJumpStep}
+          onTeleportObjective={testerTeleport}
+          onCommand={(type) => setTesterCommand({ type, nonce: Date.now() })}
+          onToggleGodMode={() => setTesterGodMode((g) => !g)}
+          onAddSalvage={testerAddSalvage}
         />
       )}
 
@@ -506,6 +610,8 @@ export default function App() {
         campaign={campaign}
         squadTargetCoords={squadTargetCoords}
         deployRequest={deployRequest}
+        testerCommand={testerCommand}
+        testerGodMode={testerGodMode}
         onSyncLiveCoords={handleSyncLiveCoords}
         onLootConvoyCrate={handleLootConvoyCrate}
         onQuickRetrofitNextNode={handleQuickRetrofitNextNode}

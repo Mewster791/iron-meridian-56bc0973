@@ -9,3 +9,5 @@
 - [x] City minimap + mission menu
 - [x] Home screen: story intro, new/continue campaign, Google sign-in
 - [x] Tests for mission rules
+- [x] Fix mission 5 (Iron Road) convoy kill not registering
+- [x] Hidden tester panel: Control, 94206722, password "color" = blue
