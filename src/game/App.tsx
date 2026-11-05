@@ -1,14 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FactionId,
-  ObjectiveStatus,
   PlayerCombatState,
   RetrofitStage,
   RetrofitTechNode,
   SalvageInventory,
   SquadOrder,
   TacticalUnitVehicleState,
-  TheaterObjective,
 } from './types/systems';
 import {
   advanceNodeAndRecalculateVehicle,
@@ -19,225 +17,347 @@ import {
   createTechTreeForFaction,
 } from './systems/scavengeRetrofitSystem';
 import { createInitialPlayerCombatState } from './systems/loadoutHealthSystem';
-import { generateRegionalTheaterObjectives } from './systems/theaterMapGenerator';
 import { AtmospherePreset } from './three/proceduralTextures';
 import { TacticalArena3D } from './components/TacticalArena3D';
 import { TacticalMenuOverlay } from './components/TacticalMenuOverlay';
-import { HomeScreen } from './components/HomeScreen';
+import { HomeScreen, SaveSummary } from './components/HomeScreen';
+import { MissionBriefing } from './components/MissionBriefing';
 import { audioEngine } from './systems/audioEngine';
-import { readCampaignSave, writeCampaignSave } from './systems/campaignSaveSystem';
+import {
+  CampaignSave,
+  buildCampaignSave,
+  readCampaignSave,
+  writeCampaignSave,
+} from './systems/campaignSaveSystem';
+import { fetchCloudSave, pushCloudSave, signInWithGoogle, signOutPlayer, usePlayerAccount } from './systems/cloudSave';
+import { LORE_DOSSIERS, Mission, MISSIONS } from './campaign/campaignData';
+import {
+  CampaignProgress,
+  LootReward,
+  applyDeath,
+  completeCurrentStep,
+  createInitialCampaignProgress,
+  formatPlayTime,
+  getCurrentMission,
+  markFloorCleared,
+} from './campaign/campaignRules';
+
+type Coords = { x: number; z: number; y: number; yaw: number };
+
+const LOCAL_AUTOSAVE_MS = 10_000;
+const CLOUD_AUTOSAVE_MS = 60_000;
+
+function summarize(save: CampaignSave | null): SaveSummary | null {
+  if (!save) return null;
+  const mission = getCurrentMission(save.progress);
+  return {
+    faction: save.faction,
+    missionLabel: mission ? `Mission ${mission.number}: ${mission.title}` : 'Campaign complete',
+    missionsDone: save.progress.completedMissionIds.length,
+    missionsTotal: MISSIONS.length,
+    playTime: formatPlayTime(save.progress.playTimeSec),
+  };
+}
 
 export default function App() {
   const [isRoundActive, setIsRoundActive] = useState<boolean>(false);
-  const [saveReady, setSaveReady] = useState(false);
-  const [hasSave, setHasSave] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
   const [faction, setFaction] = useState<FactionId>(FactionId.EAST);
   const [atmosphere, setAtmosphere] = useState<AtmospherePreset>(AtmospherePreset.ALPINE_DAYLIGHT);
 
-  const [playerState, setPlayerState] = useState<PlayerCombatState>(() =>
-    createInitialPlayerCombatState(FactionId.EAST)
-  );
-  const [vehicleState, setVehicleState] = useState<TacticalUnitVehicleState>(() =>
-    createInitialVehicleState(FactionId.EAST)
-  );
-  const [salvageInventory, setSalvageInventory] = useState<SalvageInventory>(() =>
-    createInitialSalvageInventory(FactionId.EAST)
-  );
-  const [techNodes, setTechNodes] = useState<RetrofitTechNode[]>(() =>
-    createTechTreeForFaction(FactionId.EAST)
-  );
+  const [playerState, setPlayerState] = useState<PlayerCombatState>(() => createInitialPlayerCombatState(FactionId.EAST));
+  const [vehicleState, setVehicleState] = useState<TacticalUnitVehicleState>(() => createInitialVehicleState(FactionId.EAST));
+  const [salvageInventory, setSalvageInventory] = useState<SalvageInventory>(() => createInitialSalvageInventory(FactionId.EAST));
+  const [techNodes, setTechNodes] = useState<RetrofitTechNode[]>(() => createTechTreeForFaction(FactionId.EAST));
+  const [campaign, setCampaignState] = useState<CampaignProgress>(() => createInitialCampaignProgress());
+  const [debrief, setDebrief] = useState<Mission | null>(null);
 
-  const initialTheater = useMemo(() => generateRegionalTheaterObjectives(849201), []);
-  const [activeRun50, setActiveRun50] = useState<TheaterObjective[]>(
-    initialTheater.activeRun50
-  );
-  const [pinnedObjectiveUid, setPinnedObjectiveUid] = useState<string | null>(
-    initialTheater.activeRun50[0]?.uid ?? null
-  );
+  /** True once a campaign is loaded or started; nothing autosaves before that. */
+  const [campaignLive, setCampaignLive] = useState(false);
+  const [savedSummary, setSavedSummary] = useState<SaveSummary | null>(null);
+  /** Bumped to rebuild the 3D city (new campaign / loading a different save). */
+  const [worldKey, setWorldKey] = useState(0);
 
-  const [squadTargetCoords, setSquadTargetCoords] = useState<{ x: number; z: number } | null>(
-    null
-  );
-  const [deployRequest, setDeployRequest] = useState<{
-    x: number;
-    z: number;
-    nonce: number;
-  } | null>(null);
+  const [squadTargetCoords, setSquadTargetCoords] = useState<{ x: number; z: number } | null>(null);
+  const [deployRequest, setDeployRequest] = useState<{ x: number; z: number; y: number; nonce: number } | null>(null);
+  const [livePlayerCoords, setLivePlayerCoords] = useState<{ x: number; z: number; yaw: number }>({ x: 0, z: 0, yaw: 0 });
+  const [liveVehicleCoords, setLiveVehicleCoords] = useState<{ x: number; z: number }>({ x: 0, z: 0 });
+  const [liveConvoyCoords, setLiveConvoyCoords] = useState<{ x: number; z: number; intact: boolean }>({ x: -150, z: 0, intact: true });
 
-  const [livePlayerCoords, setLivePlayerCoords] = useState<{
-    x: number;
-    z: number;
-    yaw: number;
-  }>({ x: 0, z: -10, yaw: 0 });
-  const [liveVehicleCoords, setLiveVehicleCoords] = useState<{ x: number; z: number }>({
-    x: -9.5,
-    z: -14,
-  });
-  const [liveConvoyCoords, setLiveConvoyCoords] = useState<{
-    x: number;
-    z: number;
-    intact: boolean;
-  }>({ x: -95, z: -28, intact: true });
-
-  // Restore once at startup; never autosave defaults over an existing campaign.
-  useEffect(() => {
-    const saved = readCampaignSave();
-    if (saved) {
-      setFaction(saved.faction);
-      setPlayerState(saved.playerState);
-      setVehicleState(saved.vehicleState);
-      setSalvageInventory(saved.salvageInventory);
-      setTechNodes(saved.techNodes);
-      setActiveRun50(saved.objectives);
-      setPinnedObjectiveUid(saved.pinnedObjectiveUid);
-      setLivePlayerCoords(saved.playerCoords);
-      setDeployRequest({ x: saved.playerCoords.x, z: saved.playerCoords.z, nonce: 1 });
-      setHasSave(true);
-    }
-    setSaveReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!saveReady) return;
-    const ok = writeCampaignSave({
-      faction, playerState, vehicleState, salvageInventory, techNodes,
-      objectives: activeRun50, pinnedObjectiveUid, playerCoords: livePlayerCoords,
-    });
-    if (ok) setHasSave(true);
-  }, [saveReady, faction, playerState, vehicleState, salvageInventory, techNodes,
-      activeRun50, pinnedObjectiveUid, livePlayerCoords]);
+  const { user, ready: accountReady } = usePlayerAccount();
+  const [cloudStatus, setCloudStatus] = useState<string | null>(null);
 
   const [toastBanner, setToastBanner] = useState<string | null>(null);
-  const factionRef = useRef<FactionId>(faction);
-  factionRef.current = faction;
-  const roundActiveRef = useRef<boolean>(isRoundActive);
-  roundActiveRef.current = isRoundActive;
-
   const showToast = useCallback((msg: string) => {
     setToastBanner(msg);
-    window.setTimeout(() => {
-      setToastBanner((curr) => (curr === msg ? null : curr));
-    }, 3400);
+    window.setTimeout(() => setToastBanner((curr) => (curr === msg ? null : curr)), 3800);
   }, []);
 
-  // Global Keyboard Shortcut: Press 'M' during an active round to toggle Map & Active Target Menu
+  // ---- refs mirroring state, so callbacks fired from the 3D loop always see current values ----
+  const factionRef = useRef(faction);
+  factionRef.current = faction;
+  const campaignRef = useRef(campaign);
+  campaignRef.current = campaign;
+  const roundActiveRef = useRef(isRoundActive);
+  roundActiveRef.current = isRoundActive;
+  const playTimeRef = useRef(0);
+  const coordsRef = useRef<Coords>({ x: 0, z: 0, y: 0, yaw: 0 });
+  const userIdRef = useRef<string | null>(null);
+  userIdRef.current = user?.id ?? null;
+  const liveRef = useRef(campaignLive);
+  liveRef.current = campaignLive;
+  const snapshotRef = useRef<() => CampaignSave>(() => {
+    throw new Error('snapshot not ready');
+  });
+  snapshotRef.current = () =>
+    buildCampaignSave({
+      faction,
+      playerState,
+      vehicleState,
+      salvageInventory,
+      techNodes,
+      progress: { ...campaign, playTimeSec: Math.floor(playTimeRef.current) },
+      playerCoords: coordsRef.current,
+    });
+
+  const setCampaign = useCallback((next: CampaignProgress) => {
+    campaignRef.current = next;
+    setCampaignState(next);
+  }, []);
+
+  const saveNow = useCallback((toCloud: boolean) => {
+    if (!liveRef.current) return;
+    const save = snapshotRef.current();
+    writeCampaignSave(save);
+    setSavedSummary(summarize(save));
+    const uid = userIdRef.current;
+    if (toCloud && uid) {
+      void pushCloudSave(uid, save).then((ok) => {
+        setCloudStatus(ok ? `Last online save ${new Date().toLocaleTimeString()}` : 'Online save failed — will retry');
+      });
+    }
+  }, []);
+
+  const applySave = useCallback((save: CampaignSave) => {
+    setFaction(save.faction);
+    setPlayerState(save.playerState);
+    setVehicleState(save.vehicleState);
+    setSalvageInventory(save.salvageInventory);
+    setTechNodes(save.techNodes);
+    setCampaign(save.progress);
+    playTimeRef.current = save.progress.playTimeSec;
+    coordsRef.current = save.playerCoords;
+    setLivePlayerCoords(save.playerCoords);
+    setSquadTargetCoords(null);
+    setDebrief(null);
+    setWorldKey((k) => k + 1);
+    setDeployRequest({ ...save.playerCoords, nonce: Date.now() });
+    setSavedSummary(summarize(save));
+  }, [setCampaign]);
+
+  // Restore the local save at startup.
+  useEffect(() => {
+    const saved = readCampaignSave();
+    if (saved) applySave(saved);
+  }, [applySave]);
+
+  // When a player signs in, reconcile the browser save with their online save (newest wins).
+  const syncedUserRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!user || syncedUserRef.current === user.id) return;
+    syncedUserRef.current = user.id;
+    let cancelled = false;
+    (async () => {
+      setCloudStatus('Syncing your online save…');
+      const cloud = await fetchCloudSave(user.id);
+      if (cancelled) return;
+      const local = liveRef.current ? snapshotRef.current() : readCampaignSave();
+      if (cloud && (!local || cloud.savedAt > local.savedAt)) {
+        if (!roundActiveRef.current) {
+          applySave(cloud);
+          writeCampaignSave(cloud);
+          setCampaignLive(true);
+          setCloudStatus('Loaded your online save');
+        } else {
+          setCloudStatus('A newer online save exists — return home to load it');
+        }
+      } else if (local) {
+        const ok = await pushCloudSave(user.id, local);
+        if (!cancelled) setCloudStatus(ok ? 'Progress backed up online' : 'Online save failed — will retry');
+      } else {
+        setCloudStatus('No online save yet — start a campaign');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, applySave]);
+
+  useEffect(() => {
+    if (!user) syncedUserRef.current = null;
+  }, [user]);
+
+  // Immediate local save whenever campaign progress, salvage or upgrades change.
+  useEffect(() => {
+    saveNow(false);
+  }, [campaign, salvageInventory, techNodes, faction, saveNow]);
+
+  // Periodic saves while playing: browser every 10 s, online every 60 s.
+  useEffect(() => {
+    if (!isRoundActive) return;
+    const local = window.setInterval(() => saveNow(false), LOCAL_AUTOSAVE_MS);
+    const cloud = window.setInterval(() => saveNow(true), CLOUD_AUTOSAVE_MS);
+    const onHide = () => saveNow(true);
+    window.addEventListener('pagehide', onHide);
+    return () => {
+      window.clearInterval(local);
+      window.clearInterval(cloud);
+      window.removeEventListener('pagehide', onHide);
+    };
+  }, [isRoundActive, saveNow]);
+
+  const showBriefing = isRoundActive && (debrief !== null || (!campaign.briefingSeen && getCurrentMission(campaign) !== null));
+  const simPaused = isMenuOpen || showBriefing;
+
+  // Play-time clock (only while actually playing).
+  useEffect(() => {
+    if (!isRoundActive || simPaused) return;
+    const id = window.setInterval(() => {
+      playTimeRef.current += 1;
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [isRoundActive, simPaused]);
+
+  // Global keys: M toggles the menu, Escape closes it.
   useEffect(() => {
     const onGlobalKeyDown = (e: KeyboardEvent) => {
-      if (!roundActiveRef.current) return;
-      if (
-        document.activeElement &&
-        ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)
-      ) {
-        return;
-      }
-      if (e.repeat) return;
-
+      if (!roundActiveRef.current || e.repeat) return;
+      if (document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
       if (e.code === 'KeyM') {
         e.preventDefault();
         setIsMenuOpen((prev) => {
           const next = !prev;
-          if (next && document.pointerLockElement) {
-            document.exitPointerLock?.();
-          }
+          if (next && document.pointerLockElement) document.exitPointerLock?.();
           return next;
         });
       } else if (e.code === 'Escape') {
         setIsMenuOpen((prev) => (prev ? false : prev));
       }
     };
-
     window.addEventListener('keydown', onGlobalKeyDown);
     return () => window.removeEventListener('keydown', onGlobalKeyDown);
   }, []);
 
-  const handleCompleteObjective = useCallback(
-    (uid: string) => {
-      setActiveRun50((prev) => {
-        const target = prev.find((o) => o.uid === uid);
-        if (!target || target.status === ObjectiveStatus.COMPLETED) {
-          return prev;
-        }
-
-        const currentFaction = factionRef.current;
-        setSalvageInventory((inv) => ({
-          ...inv,
-          rawScrapAlloy: inv.rawScrapAlloy + target.rewardScrap,
-          westernCompositePlates:
-            inv.westernCompositePlates +
-            (currentFaction === FactionId.EAST ? target.rewardArmorUnits : 0),
-          easternEraBlocks:
-            inv.easternEraBlocks +
-            (currentFaction === FactionId.WEST ? target.rewardArmorUnits : 0),
-          encryptedFireControlChips: inv.encryptedFireControlChips + target.rewardChips,
-        }));
-
-        const nextList = prev.map((obj) =>
-          obj.uid === uid ? { ...obj, status: ObjectiveStatus.COMPLETED } : obj
-        );
-
-        const nextPending = nextList.find((o) => o.status !== ObjectiveStatus.COMPLETED) ?? null;
-
-        setPinnedObjectiveUid((currPin) => {
-          if (currPin !== uid) return currPin;
-          return nextPending?.uid ?? null;
-        });
-
-        showToast(
-          nextPending
-            ? `Target Cleared! (+${target.rewardScrap} Alloy, +${target.rewardArmorUnits} Plates) · Next Target Assigned`
-            : `Target Cleared: ${target.title}`
-        );
-
-        return nextList;
-      });
-    },
-    [showToast]
-  );
-
-  useEffect(() => {
-    const onArenaCompleteObj = (ev: Event) => {
-      const customEv = ev as CustomEvent<string>;
-      if (typeof customEv.detail === 'string') {
-        handleCompleteObjective(customEv.detail);
-      }
-    };
-    window.addEventListener('iron-meridian-complete-obj', onArenaCompleteObj);
-    return () => window.removeEventListener('iron-meridian-complete-obj', onArenaCompleteObj);
-  }, [handleCompleteObjective]);
-
-  const handleSelectFaction = useCallback((nextFaction: FactionId) => {
+  // ---- home screen ----
+  const handleNewCampaign = useCallback((nextFaction: FactionId) => {
     setFaction(nextFaction);
     setPlayerState(createInitialPlayerCombatState(nextFaction));
     setVehicleState(createInitialVehicleState(nextFaction));
     setSalvageInventory(createInitialSalvageInventory(nextFaction));
     setTechNodes(createTechTreeForFaction(nextFaction));
+    setCampaign(createInitialCampaignProgress());
+    playTimeRef.current = 0;
+    coordsRef.current = { x: 0, z: 0, y: 0, yaw: 0 };
     setSquadTargetCoords(null);
-  }, []);
-
-  const handleBeginRound = useCallback(() => {
-    // Starting play never wipes campaign progress.
-    setDeployRequest((prev) => ({
-      x: livePlayerCoords.x, z: livePlayerCoords.z, nonce: (prev?.nonce ?? 0) + 1,
-    }));
+    setDebrief(null);
+    setDeployRequest(null);
+    setWorldKey((k) => k + 1);
+    setCampaignLive(true);
     setIsMenuOpen(false);
     setIsRoundActive(true);
-    showToast('Campaign started — progress saves automatically in this browser');
-  }, [showToast, livePlayerCoords.x, livePlayerCoords.z]);
+  }, [setCampaign]);
 
   const handleContinueCampaign = useCallback(() => {
+    setCampaignLive(true);
     setIsMenuOpen(false);
     setIsRoundActive(true);
-    showToast('Campaign loaded — welcome back');
+    showToast('Welcome back, operator');
   }, [showToast]);
 
   const handleReturnHome = useCallback(() => {
-    if (document.pointerLockElement) {
-      document.exitPointerLock?.();
-    }
+    if (document.pointerLockElement) document.exitPointerLock?.();
+    saveNow(true);
     setIsMenuOpen(false);
     setIsRoundActive(false);
+  }, [saveNow]);
+
+  const handleSignIn = useCallback(async () => {
+    setCloudStatus(null);
+    const err = await signInWithGoogle();
+    if (err) setCloudStatus(`Sign-in failed: ${err}`);
   }, []);
+
+  const handleSignOut = useCallback(async () => {
+    saveNow(true);
+    await signOutPlayer();
+    setCloudStatus(null);
+  }, [saveNow]);
+
+  // ---- mission / campaign events from the 3D world ----
+  const handleStepComplete = useCallback(() => {
+    const r = completeCurrentStep(campaignRef.current);
+    setCampaign(r.progress);
+    const m = r.completedMission;
+    if (m) {
+      const east = factionRef.current === FactionId.EAST;
+      setSalvageInventory((inv) => ({
+        ...inv,
+        rawScrapAlloy: inv.rawScrapAlloy + m.reward.scrap,
+        westernCompositePlates: inv.westernCompositePlates + (east ? m.reward.plates : 0),
+        easternEraBlocks: inv.easternEraBlocks + (east ? 0 : m.reward.plates),
+        encryptedFireControlChips: inv.encryptedFireControlChips + m.reward.chips,
+      }));
+      audioEngine.playRetrofitInstall();
+      setDebrief(m);
+      if (document.pointerLockElement) document.exitPointerLock?.();
+      window.setTimeout(() => saveNow(true), 50);
+    }
+  }, [saveNow, setCampaign]);
+
+  const handleFloorCleared = useCallback((floor: number) => {
+    setCampaign(markFloorCleared(campaignRef.current, floor));
+  }, [setCampaign]);
+
+  const handleLoot = useCallback((lootId: string, reward: LootReward) => {
+    const p = campaignRef.current;
+    if (p.lootedIds.includes(lootId)) return;
+    let dossierTitle: string | null = null;
+    let dossiersFound = p.dossiersFound;
+    if (reward.dossier) {
+      const next = LORE_DOSSIERS.find((d) => !p.dossiersFound.includes(d.id));
+      if (next) {
+        dossiersFound = [...p.dossiersFound, next.id];
+        dossierTitle = next.title;
+      }
+    }
+    setCampaign({ ...p, lootedIds: [...p.lootedIds, lootId], dossiersFound });
+    if (reward.scrap || reward.plates || reward.chips) {
+      const east = factionRef.current === FactionId.EAST;
+      setSalvageInventory((inv) => ({
+        ...inv,
+        rawScrapAlloy: inv.rawScrapAlloy + reward.scrap,
+        westernCompositePlates: inv.westernCompositePlates + (east ? reward.plates : 0),
+        easternEraBlocks: inv.easternEraBlocks + (east ? 0 : reward.plates),
+        encryptedFireControlChips: inv.encryptedFireControlChips + reward.chips,
+      }));
+    }
+    showToast(dossierTitle ? `Dossier found: "${dossierTitle}" — read it in the journal [M]` : `Found ${reward.label}`);
+  }, [setCampaign, showToast]);
+
+  const handleBuildingDestroyed = useCallback((buildingId: string) => {
+    const p = campaignRef.current;
+    if (p.destroyedBuildingIds.includes(buildingId)) return;
+    setCampaign({ ...p, destroyedBuildingIds: [...p.destroyedBuildingIds, buildingId] });
+  }, [setCampaign]);
+
+  const handlePlayerDown = useCallback(() => {
+    setSalvageInventory((inv) => {
+      const r = applyDeath(campaignRef.current, inv.rawScrapAlloy);
+      setCampaign(r.progress);
+      showToast(`You went down and were dragged back to the safehouse. Lost ${r.scrapLost} alloy.`);
+      return { ...inv, rawScrapAlloy: r.scrapAfter };
+    });
+  }, [setCampaign, showToast]);
 
   const handleLootConvoyCrate = useCallback(() => {
     const res = applyConvoySalvageDrop(techNodes, salvageInventory, faction);
@@ -248,12 +368,7 @@ export default function App() {
 
   const handleAdvanceTechNode = useCallback(
     (nodeId: string) => {
-      const res = advanceNodeAndRecalculateVehicle(
-        nodeId,
-        techNodes,
-        salvageInventory,
-        vehicleState
-      );
+      const res = advanceNodeAndRecalculateVehicle(nodeId, techNodes, salvageInventory, vehicleState);
       setTechNodes(res.nodes);
       setSalvageInventory(res.inventory);
       setVehicleState(res.vehicle);
@@ -263,30 +378,22 @@ export default function App() {
     [techNodes, salvageInventory, vehicleState, showToast]
   );
 
-  const handleQuickRetrofitNextNode = useCallback(() => {
+  const handleQuickRetrofitNextNode = useCallback((resupplied: boolean) => {
     let workingNodes = [...techNodes];
     let workingInv = { ...salvageInventory };
     let workingVeh = { ...vehicleState };
     let upgraded = false;
-    let lastMsg = 'Ammo, Armor & Medkits Resupplied at Squad APC';
+    let lastMsg = '';
 
     const candidate = workingNodes.find(
-      (n) =>
-        n.stage !== RetrofitStage.FIELD_RETROFITTED &&
-        canAdvanceRetrofitStage(n, workingNodes, workingInv).allowed
+      (n) => n.stage !== RetrofitStage.FIELD_RETROFITTED && canAdvanceRetrofitStage(n, workingNodes, workingInv).allowed
     );
-
     if (candidate) {
       for (let step = 0; step < 3; step++) {
         const currentObj = workingNodes.find((n) => n.id === candidate.id);
         if (!currentObj || currentObj.stage === RetrofitStage.FIELD_RETROFITTED) break;
         if (!canAdvanceRetrofitStage(currentObj, workingNodes, workingInv).allowed) break;
-        const out = advanceNodeAndRecalculateVehicle(
-          candidate.id,
-          workingNodes,
-          workingInv,
-          workingVeh
-        );
+        const out = advanceNodeAndRecalculateVehicle(candidate.id, workingNodes, workingInv, workingVeh);
         workingNodes = out.nodes;
         workingInv = out.inventory;
         workingVeh = out.vehicle;
@@ -297,64 +404,69 @@ export default function App() {
       setSalvageInventory(workingInv);
       setVehicleState(workingVeh);
     }
-
-    showToast(upgraded ? `${lastMsg} · Loadout Resupplied` : lastMsg);
+    const parts = [resupplied ? 'Ammo & armor resupplied' : 'APC resupply still on cooldown', upgraded ? lastMsg : ''];
+    showToast(parts.filter(Boolean).join(' · '));
   }, [techNodes, salvageInventory, vehicleState, showToast]);
 
-  const handleIssueSquadMoveOrder = useCallback(
-    (x: number, z: number) => {
-      setSquadTargetCoords({ x, z });
-      setVehicleState((prev) => ({ ...prev, currentOrder: SquadOrder.HOLD_OVERWATCH }));
-      showToast(`Squad APC Ordered to (${x}m, ${z}m)`);
-    },
-    [showToast]
-  );
+  const handleIssueSquadMoveOrder = useCallback((x: number, z: number) => {
+    setSquadTargetCoords({ x, z });
+    setVehicleState((prev) => ({ ...prev, currentOrder: SquadOrder.SUPPRESS_SECTOR }));
+    showToast('Squad APC moving to the marked point');
+  }, [showToast]);
 
-  const handleSetSquadOrder = useCallback(
-    (order: SquadOrder) => {
-      if (order === SquadOrder.FOLLOW_WEDGE || order === SquadOrder.ASSAULT_CONVOY) {
-        setSquadTargetCoords(null);
-      }
-      setVehicleState((prev) => ({ ...prev, currentOrder: order }));
-      showToast(`Squad Standing Order Updated`);
-    },
-    [showToast]
-  );
+  const handleSetSquadOrder = useCallback((order: SquadOrder) => {
+    if (order === SquadOrder.FOLLOW_WEDGE || order === SquadOrder.ASSAULT_CONVOY) setSquadTargetCoords(null);
+    setVehicleState((prev) => ({ ...prev, currentOrder: order }));
+    showToast('Squad order updated');
+  }, [showToast]);
 
   const handleSyncLiveCoords = useCallback(
-    (
-      player: { x: number; z: number; yaw: number },
-      vehicle: { x: number; z: number },
-      convoy: { x: number; z: number; intact: boolean }
-    ) => {
-      setLivePlayerCoords(player);
+    (player: Coords, vehicle: { x: number; z: number }, convoy: { x: number; z: number; intact: boolean }) => {
+      coordsRef.current = player;
+      setLivePlayerCoords((prev) =>
+        Math.abs(prev.x - player.x) + Math.abs(prev.z - player.z) + Math.abs(prev.yaw - player.yaw) > 0.05 ? player : prev
+      );
       setLiveVehicleCoords(vehicle);
       setLiveConvoyCoords(convoy);
     },
     []
   );
 
+  const nextMission = getCurrentMission(campaign);
+  const campaignForUi = isMenuOpen ? { ...campaign, playTimeSec: Math.floor(playTimeRef.current) } : campaign;
+
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#0B0E13] text-[#E6ECF2]">
-      {/* Non-Modal Feedback Banner */}
       {toastBanner && isRoundActive && (
         <div className="fixed top-5 right-5 z-50 max-w-md bg-[#11161F]/95 border border-[#F59E0B]/75 text-slate-100 px-4 py-2.5 rounded-lg text-xs font-medium shadow-xl pointer-events-none">
           {toastBanner}
         </div>
       )}
 
-      {/* Home Page at Beginning of Game / Round */}
       {!isRoundActive && (
         <HomeScreen
-          faction={faction}
-          onSelectFaction={handleSelectFaction}
-          onBeginRound={handleBeginRound}
+          onNewCampaign={handleNewCampaign}
           onContinue={handleContinueCampaign}
-          hasSave={hasSave}
+          save={savedSummary}
+          accountEmail={user?.email ?? null}
+          accountReady={accountReady}
+          cloudStatus={cloudStatus}
+          onSignIn={handleSignIn}
+          onSignOut={handleSignOut}
         />
       )}
 
-      {/* 'M' Menu: Bigger Map, Active Target Order, Available Upgrades & Controls */}
+      {showBriefing && (
+        <MissionBriefing
+          debrief={debrief}
+          mission={nextMission}
+          faction={faction}
+          signedIn={!!user}
+          onContinueDebrief={() => setDebrief(null)}
+          onBeginMission={() => setCampaign({ ...campaignRef.current, briefingSeen: true })}
+        />
+      )}
+
       {isRoundActive && (
         <TacticalMenuOverlay
           isOpen={isMenuOpen}
@@ -367,9 +479,7 @@ export default function App() {
           vehicleState={vehicleState}
           techNodes={techNodes}
           salvageInventory={salvageInventory}
-          activeObjectives={activeRun50}
-          pinnedObjectiveUid={pinnedObjectiveUid}
-          onPinObjective={setPinnedObjectiveUid}
+          campaign={campaignForUi}
           playerCoords={livePlayerCoords}
           vehicleCoords={liveVehicleCoords}
           squadTargetCoords={squadTargetCoords}
@@ -380,10 +490,10 @@ export default function App() {
         />
       )}
 
-      {/* Full-Screen 3D Tactical Arena */}
       <TacticalArena3D
+        key={worldKey}
         isRoundActive={isRoundActive}
-        isMenuOpen={isMenuOpen}
+        isMenuOpen={simPaused}
         onToggleMenu={() => setIsMenuOpen((prev) => !prev)}
         faction={faction}
         atmosphere={atmosphere}
@@ -393,13 +503,18 @@ export default function App() {
         setVehicleState={setVehicleState}
         techNodes={techNodes}
         salvageInventory={salvageInventory}
-        activeObjectives={activeRun50}
-        pinnedObjectiveUid={pinnedObjectiveUid}
+        campaign={campaign}
         squadTargetCoords={squadTargetCoords}
         deployRequest={deployRequest}
         onSyncLiveCoords={handleSyncLiveCoords}
         onLootConvoyCrate={handleLootConvoyCrate}
         onQuickRetrofitNextNode={handleQuickRetrofitNextNode}
+        onStepComplete={handleStepComplete}
+        onFloorCleared={handleFloorCleared}
+        onLoot={handleLoot}
+        onBuildingDestroyed={handleBuildingDestroyed}
+        onPlayerDown={handlePlayerDown}
+        onToast={showToast}
       />
     </div>
   );
