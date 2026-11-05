@@ -157,15 +157,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   Continue Campaign
                 </button>
               )}
-              {hasSave && onContinue && (
-                <button
-                  type="button"
-                  onClick={onContinue}
-                  className="px-7 py-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display text-xl font-bold tracking-wider uppercase transition-colors cursor-pointer"
-                >
-                  Continue Campaign
-                </button>
-              )}
               <button
                 type="button"
                 onClick={onBeginRound}
