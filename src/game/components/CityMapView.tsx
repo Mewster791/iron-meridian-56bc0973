@@ -40,7 +40,7 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
         h: COMPACT_SPAN,
       }
     : { x: -ext, y: -ext, w: ext * 2, h: ext * 2 };
-  const k = view.w / 320; // scale markers with zoom
+  const k = compactMinimap ? 0.65 : 1; // marker scale
 
   const handleClick = (e: React.MouseEvent<SVGSVGElement>) => {
     if (!onClickMapWorldPoint || !svgRef.current) return;
