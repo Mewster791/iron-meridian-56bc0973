@@ -48,34 +48,6 @@ export default function App() {
     createTechTreeForFaction(FactionId.EAST)
   );
 
-  // Restore once at startup; never autosave defaults over an existing campaign.
-  useEffect(() => {
-    const saved = readCampaignSave();
-    if (saved) {
-      setFaction(saved.faction);
-      setPlayerState(saved.playerState);
-      setVehicleState(saved.vehicleState);
-      setSalvageInventory(saved.salvageInventory);
-      setTechNodes(saved.techNodes);
-      setActiveRun50(saved.objectives);
-      setPinnedObjectiveUid(saved.pinnedObjectiveUid);
-      setLivePlayerCoords(saved.playerCoords);
-      setDeployRequest({ x: saved.playerCoords.x, z: saved.playerCoords.z, nonce: 1 });
-      setHasSave(true);
-    }
-    setSaveReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!saveReady) return;
-    const ok = writeCampaignSave({
-      faction, playerState, vehicleState, salvageInventory, techNodes,
-      objectives: activeRun50, pinnedObjectiveUid, playerCoords: livePlayerCoords,
-    });
-    if (ok) setHasSave(true);
-  }, [saveReady, faction, playerState, vehicleState, salvageInventory, techNodes,
-      activeRun50, pinnedObjectiveUid, livePlayerCoords]);
-
   const initialTheater = useMemo(() => generateRegionalTheaterObjectives(849201), []);
   const [activeRun50, setActiveRun50] = useState<TheaterObjective[]>(
     initialTheater.activeRun50
@@ -107,6 +79,34 @@ export default function App() {
     z: number;
     intact: boolean;
   }>({ x: -95, z: -28, intact: true });
+
+  // Restore once at startup; never autosave defaults over an existing campaign.
+  useEffect(() => {
+    const saved = readCampaignSave();
+    if (saved) {
+      setFaction(saved.faction);
+      setPlayerState(saved.playerState);
+      setVehicleState(saved.vehicleState);
+      setSalvageInventory(saved.salvageInventory);
+      setTechNodes(saved.techNodes);
+      setActiveRun50(saved.objectives);
+      setPinnedObjectiveUid(saved.pinnedObjectiveUid);
+      setLivePlayerCoords(saved.playerCoords);
+      setDeployRequest({ x: saved.playerCoords.x, z: saved.playerCoords.z, nonce: 1 });
+      setHasSave(true);
+    }
+    setSaveReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!saveReady) return;
+    const ok = writeCampaignSave({
+      faction, playerState, vehicleState, salvageInventory, techNodes,
+      objectives: activeRun50, pinnedObjectiveUid, playerCoords: livePlayerCoords,
+    });
+    if (ok) setHasSave(true);
+  }, [saveReady, faction, playerState, vehicleState, salvageInventory, techNodes,
+      activeRun50, pinnedObjectiveUid, livePlayerCoords]);
 
   const [toastBanner, setToastBanner] = useState<string | null>(null);
   const factionRef = useRef<FactionId>(faction);
