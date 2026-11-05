@@ -145,7 +145,13 @@ interface TacticalArena3DProps {
   onBuildingDestroyed: (buildingId: string) => void;
   onPlayerDown: () => void;
   onToast: (msg: string) => void;
+  /** Tester panel actions (nonce changes each request). */
+  testerCommand?: { type: TesterCommandType; nonce: number } | null;
+  /** Tester panel: player takes no damage. */
+  testerGodMode?: boolean;
 }
+
+export type TesterCommandType = 'KILL_NEAR' | 'KILL_MISSION' | 'DESTROY_CONVOY' | 'HEAL';
 
 type EnemyKind = 'STREET' | 'FLOOR' | 'GUARD' | 'HVT' | 'WAVE';
 
@@ -224,6 +230,8 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
   campaign,
   squadTargetCoords,
   deployRequest,
+  testerCommand = null,
+  testerGodMode = false,
   onSyncLiveCoords,
   onLootConvoyCrate,
   onQuickRetrofitNextNode,
@@ -284,6 +292,11 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
   useEffect(() => {
     deployReqRef.current = deployRequest;
   }, [deployRequest]);
+
+  const testerCmdRef = useRef(testerCommand);
+  testerCmdRef.current = testerCommand;
+  const godModeRef = useRef(testerGodMode);
+  godModeRef.current = testerGodMode;
 
   useEffect(() => {
     simPausedRef.current = !isRoundActive || isMenuOpen;
@@ -603,7 +616,8 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     let convoyX = -120;
     let convoyHp = CONVOY_MAX_HP;
     let convoyDestroyedCooldown = 0;
-    let convoyKilledThisFrame = false;
+    /** Latched when the convoy dies; the mission director consumes it (tracers resolve after the director each frame). */
+    let convoyKillPending = false;
 
     // ---- Enemy actors (street patrols, building garrisons, guards, high-value targets, assault waves) ----
     const enemies: EnemyActor[] = [];
@@ -733,6 +747,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       d.waveTimer = 4;
       d.completeSent = false;
       d.escortsSpawned = false;
+      convoyKillPending = false;
       bombGroup.visible = false;
       if (!step) return;
       const b = d.building;
@@ -1109,7 +1124,8 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
               spawnEnemy({ kind: 'WAVE', x: convoyX - 8 + k * 5, z: cz - 6.5, y: 0, bounds: null, floor: 0, chase: true });
             }
           }
-          if (convoyKilledThisFrame) {
+          if (convoyKillPending) {
+            convoyKillPending = false;
             completeStep();
             break;
           }
@@ -1246,7 +1262,42 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     let isDraggingLook = false;
     let lastPointerX = 0;
     let lastPointerY = 0;
+    const destroyConvoy = () => {
+      convoyHp = 0;
+      convoyKillPending = true;
+    audioEngine.playExplosion();
+    camControllerRef.current.applyCombatImpulse(0.04, 0, 0.25);
+    spawnImpactSparks(convoyTruckMesh.position, 18, true);
+    convoyLeadEscort.root.visible = false;
+    convoyTruckMesh.visible = false;
+    convoyRearEscort.root.visible = false;
+    convoyDestroyedCooldown = 24.0;
+
+    const dropCrateMesh = buildSalvageTechCrate();
+    const dropPos = { x: convoyX, z: getHighwayCenterZ(convoyX) };
+    staticPhysics.resolveHorizontalBody(
+      dropPos,
+      sampleWalkableHeight(dropPos.x, dropPos.z),
+      1.0,
+      0.9
+    );
+    const dropY = sampleWalkableHeight(dropPos.x, dropPos.z);
+    dropCrateMesh.position.set(dropPos.x, dropY, dropPos.z);
+    scene.add(dropCrateMesh);
+    const crateId = `crate-${Date.now()}`;
+    registerCrateCollider(crateId, dropPos.x, dropY, dropPos.z);
+    droppedCrates.push({
+      id: crateId,
+      mesh: dropCrateMesh,
+      collected: false,
+    });
+    setConvoyStatusText(
+      'Convoy destroyed — salvage crate dropped on Grand Avenue (press E)'
+    );
+    };
+
     let processedDeployNonce = deployReqRef.current?.nonce ?? 0;
+    let processedTesterNonce = testerCmdRef.current?.nonce ?? 0;
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (
@@ -1400,7 +1451,6 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       skyDome.uniforms.uTime.value = elapsed;
       skyDome.mesh.position.copy(camera.position);
       simTime += dt;
-      convoyKilledThisFrame = false;
 
       // Apply loot / demolitions restored from a loaded or cloud save.
       const prog = campaignRef.current;
@@ -1423,6 +1473,28 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       }
 
       // Handle Fast-Deploy Request from M Tactical Map Menu (with solid obstacle push-out)
+      const tCmd = testerCmdRef.current;
+      if (tCmd && tCmd.nonce !== processedTesterNonce) {
+        processedTesterNonce = tCmd.nonce;
+        if (tCmd.type === 'KILL_NEAR') {
+          for (const e of enemies) if (e.alive && e.rig.root.position.distanceTo(_playerPos) < 40) killEnemy(e);
+        } else if (tCmd.type === 'KILL_MISSION') {
+          for (const e of enemies) if (e.alive && e.kind !== 'STREET') killEnemy(e);
+        } else if (tCmd.type === 'DESTROY_CONVOY') {
+          if (convoyHp > 0) destroyConvoy();
+        } else if (tCmd.type === 'HEAL') {
+          const c = combatRef.current;
+          combatRef.current = {
+            ...c,
+            hp: c.maxHp,
+            armorIntegrity: c.maxArmorIntegrity,
+            medkitsRemaining: c.medkitMax,
+            magazineAmmo: c.magazineCapacity,
+            reserveAmmo: Math.max(c.reserveAmmo, 300),
+          };
+        }
+      }
+
       if (deployReqRef.current && deployReqRef.current.nonce !== processedDeployNonce) {
         processedDeployNonce = deployReqRef.current.nonce;
         const pDep = {
@@ -2239,38 +2311,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
               consumed = true;
               spawnImpactSparks(truckHits[0].point, 4, false);
               convoyHp -= tr.damage;
-              if (convoyHp <= 0) {
-                convoyKilledThisFrame = true;
-                audioEngine.playExplosion();
-                camControllerRef.current.applyCombatImpulse(0.04, 0, 0.25);
-                spawnImpactSparks(convoyTruckMesh.position, 18, true);
-                convoyLeadEscort.root.visible = false;
-                convoyTruckMesh.visible = false;
-                convoyRearEscort.root.visible = false;
-                convoyDestroyedCooldown = 24.0;
-
-                const dropCrateMesh = buildSalvageTechCrate();
-                const dropPos = { x: convoyX, z: getHighwayCenterZ(convoyX) };
-                staticPhysics.resolveHorizontalBody(
-                  dropPos,
-                  sampleWalkableHeight(dropPos.x, dropPos.z),
-                  1.0,
-                  0.9
-                );
-                const dropY = sampleWalkableHeight(dropPos.x, dropPos.z);
-                dropCrateMesh.position.set(dropPos.x, dropY, dropPos.z);
-                scene.add(dropCrateMesh);
-                const crateId = `crate-${Date.now()}`;
-                registerCrateCollider(crateId, dropPos.x, dropY, dropPos.z);
-                droppedCrates.push({
-                  id: crateId,
-                  mesh: dropCrateMesh,
-                  collected: false,
-                });
-                setConvoyStatusText(
-                  'Convoy destroyed — salvage crate dropped on Grand Avenue (press E)'
-                );
-              }
+              if (convoyHp <= 0) destroyConvoy();
             }
           }
 
@@ -2348,8 +2389,10 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
             if (playerProj !== null) {
               consumed = true;
               camControllerRef.current.applyCombatImpulse(0.018, 0, 0.08);
-              applyIncomingPlayerDamage(combatRef.current, tr.damage, 0.35);
-              d.tookDamage = true;
+              if (!godModeRef.current) {
+                applyIncomingPlayerDamage(combatRef.current, tr.damage, 0.35);
+                d.tookDamage = true;
+              }
               if (combatRef.current.hp <= 0) {
                 // Going down sends you back to the safehouse; the current step restarts.
                 handlePlayerDown();
