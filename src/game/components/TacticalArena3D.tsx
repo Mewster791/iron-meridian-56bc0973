@@ -1265,35 +1265,35 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     const destroyConvoy = () => {
       convoyHp = 0;
       convoyKillPending = true;
-    audioEngine.playExplosion();
-    camControllerRef.current.applyCombatImpulse(0.04, 0, 0.25);
-    spawnImpactSparks(convoyTruckMesh.position, 18, true);
-    convoyLeadEscort.root.visible = false;
-    convoyTruckMesh.visible = false;
-    convoyRearEscort.root.visible = false;
-    convoyDestroyedCooldown = 24.0;
-
-    const dropCrateMesh = buildSalvageTechCrate();
-    const dropPos = { x: convoyX, z: getHighwayCenterZ(convoyX) };
-    staticPhysics.resolveHorizontalBody(
-      dropPos,
-      sampleWalkableHeight(dropPos.x, dropPos.z),
-      1.0,
-      0.9
-    );
-    const dropY = sampleWalkableHeight(dropPos.x, dropPos.z);
-    dropCrateMesh.position.set(dropPos.x, dropY, dropPos.z);
-    scene.add(dropCrateMesh);
-    const crateId = `crate-${Date.now()}`;
-    registerCrateCollider(crateId, dropPos.x, dropY, dropPos.z);
-    droppedCrates.push({
-      id: crateId,
-      mesh: dropCrateMesh,
-      collected: false,
-    });
-    setConvoyStatusText(
-      'Convoy destroyed — salvage crate dropped on Grand Avenue (press E)'
-    );
+      audioEngine.playExplosion();
+      camControllerRef.current.applyCombatImpulse(0.04, 0, 0.25);
+      spawnImpactSparks(convoyTruckMesh.position, 18, true);
+      convoyLeadEscort.root.visible = false;
+      convoyTruckMesh.visible = false;
+      convoyRearEscort.root.visible = false;
+      convoyDestroyedCooldown = 24.0;
+  
+      const dropCrateMesh = buildSalvageTechCrate();
+      const dropPos = { x: convoyX, z: getHighwayCenterZ(convoyX) };
+      staticPhysics.resolveHorizontalBody(
+        dropPos,
+        sampleWalkableHeight(dropPos.x, dropPos.z),
+        1.0,
+        0.9
+      );
+      const dropY = sampleWalkableHeight(dropPos.x, dropPos.z);
+      dropCrateMesh.position.set(dropPos.x, dropY, dropPos.z);
+      scene.add(dropCrateMesh);
+      const crateId = `crate-${Date.now()}`;
+      registerCrateCollider(crateId, dropPos.x, dropY, dropPos.z);
+      droppedCrates.push({
+        id: crateId,
+        mesh: dropCrateMesh,
+        collected: false,
+      });
+      setConvoyStatusText(
+        'Convoy destroyed — salvage crate dropped on Grand Avenue (press E)'
+      );
     };
 
     let processedDeployNonce = deployReqRef.current?.nonce ?? 0;
