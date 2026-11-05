@@ -7,7 +7,10 @@ import {
   canStartHoldAction,
   completeCurrentStep,
   createInitialCampaignProgress,
+  getCurrentStep,
   isBuildingFullyCleared,
+  jumpToMission,
+  jumpToStep,
   isFloorCleared,
   markFloorCleared,
   stepDefendTimer,
@@ -107,6 +110,30 @@ describe('pacing', () => {
   it('lets the APC resupply only every 180 seconds', () => {
     expect(canResupplyAtApc(179)).toBe(false);
     expect(canResupplyAtApc(180)).toBe(true);
+  });
+});
+
+describe('tester jumps', () => {
+  it('jumping to Iron Road marks missions 1-4 done and Broadcast House destroyed', () => {
+    const p = jumpToMission(createInitialCampaignProgress(), 4);
+    expect(MISSIONS[p.missionIndex].title).toBe('Iron Road');
+    expect(p.completedMissionIds).toEqual(['m01', 'm02', 'm03', 'm04']);
+    expect(p.destroyedBuildingIds).toContain('broadcast');
+    expect(p.stepIndex).toBe(0);
+    expect(p.briefingSeen).toBe(false);
+  });
+
+  it('jumping to a step stays inside the current mission', () => {
+    const p = jumpToStep(jumpToMission(createInitialCampaignProgress(), 4), 99);
+    expect(p.stepIndex).toBe(MISSIONS[4].steps.length - 1);
+  });
+
+  it('destroying the Iron Road convoy then returning home finishes mission 5', () => {
+    let p = jumpToMission(createInitialCampaignProgress(), 4);
+    p = completeCurrentStep(p).progress;
+    expect(getCurrentStep(p)?.type).toBe('RETURN_SAFEHOUSE');
+    const r = completeCurrentStep(p);
+    expect(r.completedMission?.id).toBe('m05');
   });
 });
 
