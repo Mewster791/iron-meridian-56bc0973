@@ -219,13 +219,18 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
   setVehicleState,
   techNodes,
   salvageInventory,
-  activeObjectives,
-  pinnedObjectiveUid,
+  campaign,
   squadTargetCoords,
   deployRequest,
   onSyncLiveCoords,
   onLootConvoyCrate,
   onQuickRetrofitNextNode,
+  onStepComplete,
+  onFloorCleared,
+  onLoot,
+  onBuildingDestroyed,
+  onPlayerDown,
+  onToast,
 }) => {
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
 
@@ -233,17 +238,21 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
   const vehicleRef = useRef<TacticalUnitVehicleState>(vehicleState);
   const factionRef = useRef<FactionId>(faction);
   const atmosphereRef = useRef<AtmospherePreset>(atmosphere);
-  const objectivesRef = useRef<TheaterObjective[]>(activeObjectives);
-  const pinnedUidRef = useRef<string | null>(pinnedObjectiveUid);
+  const campaignRef = useRef<CampaignProgress>(campaign);
   const squadTargetRef = useRef<{ x: number; z: number } | null>(squadTargetCoords);
-  const deployReqRef = useRef<{ x: number; z: number; nonce: number } | null>(deployRequest);
+  const deployReqRef = useRef<{ x: number; z: number; y: number; nonce: number } | null>(deployRequest);
   const simPausedRef = useRef<boolean>(!isRoundActive || isMenuOpen);
 
   const callbacksRef = useRef({
     onLootConvoyCrate,
     onQuickRetrofitNextNode,
-    onCompleteObjective: (_uid: string) => {},
     onSyncLiveCoords,
+    onStepComplete,
+    onFloorCleared,
+    onLoot,
+    onBuildingDestroyed,
+    onPlayerDown,
+    onToast,
   });
 
   useEffect(() => {
@@ -263,12 +272,8 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
   }, [atmosphere]);
 
   useEffect(() => {
-    objectivesRef.current = activeObjectives;
-  }, [activeObjectives]);
-
-  useEffect(() => {
-    pinnedUidRef.current = pinnedObjectiveUid;
-  }, [pinnedObjectiveUid]);
+    campaignRef.current = campaign;
+  }, [campaign]);
 
   useEffect(() => {
     squadTargetRef.current = squadTargetCoords;
@@ -289,7 +294,13 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     callbacksRef.current.onLootConvoyCrate = onLootConvoyCrate;
     callbacksRef.current.onQuickRetrofitNextNode = onQuickRetrofitNextNode;
     callbacksRef.current.onSyncLiveCoords = onSyncLiveCoords;
-  }, [onLootConvoyCrate, onQuickRetrofitNextNode, onSyncLiveCoords]);
+    callbacksRef.current.onStepComplete = onStepComplete;
+    callbacksRef.current.onFloorCleared = onFloorCleared;
+    callbacksRef.current.onLoot = onLoot;
+    callbacksRef.current.onBuildingDestroyed = onBuildingDestroyed;
+    callbacksRef.current.onPlayerDown = onPlayerDown;
+    callbacksRef.current.onToast = onToast;
+  }, [onLootConvoyCrate, onQuickRetrofitNextNode, onSyncLiveCoords, onStepComplete, onFloorCleared, onLoot, onBuildingDestroyed, onPlayerDown, onToast]);
 
   const camControllerRef = useRef<SeamlessCameraPovController>(
     new SeamlessCameraPovController(DEFAULT_CAMERA_RIG_CONFIG)
@@ -300,8 +311,16 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
   const [muted, setMuted] = useState(false);
   const [nearbyPrompt, setNearbyPrompt] = useState<string | null>(null);
   const [convoyStatusText, setConvoyStatusText] = useState<string>(
-    'Enemy Armored Convoy Moving on North Highway'
+    'Consortium convoy patrolling Grand Avenue'
   );
+  const [missionHud, setMissionHud] = useState<MissionHudState>({
+    missionLabel: '',
+    stepText: '',
+    detail: '',
+    progress: null,
+    locationLabel: 'Streets of Varos-Meridian',
+  });
+  const [mapWaypoint, setMapWaypoint] = useState<{ x: number; z: number } | null>(null);
   const [pinnedHudProj, setPinnedHudProj] = useState<{
     visible: boolean;
     xPct: number;
@@ -329,23 +348,14 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
   });
 
   const [minimapState, setMinimapState] = useState<{
-    player: { x: number; z: number; yaw: number };
+    player: { x: number; z: number; y: number; yaw: number };
     vehicle: { x: number; z: number };
     convoy: { x: number; z: number; intact: boolean };
   }>({
-    player: { x: 0, z: -10, yaw: 0 },
-    vehicle: { x: -7.5, z: -14 },
-    convoy: { x: -55, z: -28, intact: true },
+    player: { x: 0, z: 0, y: 0, yaw: 0 },
+    vehicle: { x: 0, z: 0 },
+    convoy: { x: -55, z: CONVOY_LANE_Z, intact: true },
   });
-
-  // Expose objective completion callback through custom DOM event or prop
-  const completeObjectiveRef = useRef<(uid: string) => void>(() => {});
-  useEffect(() => {
-    // Dispatch custom event caught by App so objective state stays unified
-    completeObjectiveRef.current = (uid: string) => {
-      window.dispatchEvent(new CustomEvent('iron-meridian-complete-obj', { detail: uid }));
-    };
-  }, []);
 
   const handleCycleSquadOrder = () => {
     const orderCycle: SquadOrder[] = [
