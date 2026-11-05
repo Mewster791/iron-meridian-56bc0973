@@ -2531,6 +2531,8 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       document.removeEventListener('pointerlockchange', onPointerLockChange);
       window.removeEventListener('resize', onResize);
       renderer.domElement.removeEventListener('webglcontextlost', handleContextLost);
+      for (let i = enemies.length - 1; i >= 0; i--) despawnEnemy(enemies[i]);
+      city.dispose();
       matLib.dispose();
       renderer.dispose();
     };
@@ -2538,22 +2540,9 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
 
   const gunSpec = FACTION_PRIMARY_FIREARMS[faction];
   const swordSpec = FACTION_EMERGENCY_SWORDS[faction];
-  const completedObjCount = activeObjectives.filter(
-    (o) => o.status === ObjectiveStatus.COMPLETED
-  ).length;
-
-  const activeTargetObj = pinnedObjectiveUid
-    ? activeObjectives.find((o) => o.uid === pinnedObjectiveUid)
-    : activeObjectives.find((o) => o.status !== ObjectiveStatus.COMPLETED);
-
-  const activeTargetDistance = activeTargetObj
-    ? Math.round(
-        Math.hypot(
-          activeTargetObj.worldX - minimapState.player.x,
-          activeTargetObj.worldZ - minimapState.player.z
-        )
-      )
-    : 0;
+  const currentStep = getCurrentStep(campaign);
+  const targetBuildingId = getStepBuilding(currentStep)?.id ?? null;
+  const missionsDone = campaign.completedMissionIds.length;
 
   const availableUpgrades = techNodes.filter(
     (n) => n.stage !== RetrofitStage.FIELD_RETROFITTED
@@ -2606,7 +2595,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                     fontSize="10"
                     fontFamily="monospace"
                   >
-                    TARGET {pinnedHudProj.distMeters}m · {pinnedHudProj.title.split(':')[0]}
+                    {pinnedHudProj.distMeters}m · {pinnedHudProj.title.length > 26 ? `${pinnedHudProj.title.slice(0, 25)}…` : pinnedHudProj.title}
                   </text>
                   <polygon
                     points="0,-2 6,4 0,10 -6,4"
@@ -2672,38 +2661,47 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
               title="Open Bigger Map & Active Target [M]"
               className="w-40 h-40 rounded-lg bg-[#0D1219]/95 border border-slate-700/85 p-1.5 relative overflow-hidden hover:border-[#F59E0B] transition-colors cursor-pointer"
             >
-              <TopographicalMapView
-                objectives={activeObjectives}
-                pinnedObjectiveUid={pinnedObjectiveUid}
+              <CityMapView
                 playerCoords={minimapState.player}
                 vehicleCoords={minimapState.vehicle}
                 squadTargetCoords={squadTargetCoords}
                 convoyCoords={minimapState.convoy}
+                waypoint={mapWaypoint}
+                targetBuildingId={targetBuildingId}
+                destroyedBuildingIds={campaign.destroyedBuildingIds}
                 compactMinimap
               />
               <div className="absolute bottom-1.5 left-2 right-2 flex justify-between items-center bg-[#090D12]/90 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-200 tabular-nums">
-                <span>{completedObjCount}/{activeObjectives.length}</span>
+                <span>{missionsDone}/{MISSIONS.length}</span>
                 <span className="text-[#F59E0B] font-semibold">[M] MAP</span>
               </div>
             </button>
 
-            <div className="pointer-events-none bg-[#0D1219]/92 border border-slate-700/80 rounded-lg px-3.5 py-2.5 text-xs space-y-1.5 max-w-xs">
+            <div className="pointer-events-none bg-[#0D1219]/92 border border-slate-700/80 rounded-lg px-3.5 py-2.5 text-xs space-y-1.5 w-80">
               <div className="flex items-center justify-between gap-2 text-[11px] font-mono text-[#F59E0B]">
-                <span className="flex items-center gap-1 font-semibold">
-                  <Target className="w-3.5 h-3.5" />
-                  CURRENT TARGET
+                <span className="flex items-center gap-1 font-semibold truncate">
+                  <Target className="w-3.5 h-3.5 shrink-0" />
+                  {missionHud.missionLabel.toUpperCase()}
                 </span>
-                {activeTargetObj && (
-                  <span className="text-sky-300 tabular-nums">{activeTargetDistance}m</span>
+                {pinnedHudProj.distMeters > 0 && missionHud.stepText && (
+                  <span className="text-sky-300 tabular-nums shrink-0">{pinnedHudProj.distMeters}m</span>
                 )}
               </div>
-              <div className="font-semibold text-white leading-snug truncate">
-                {activeTargetObj ? activeTargetObj.title : 'All Regional Targets Cleared'}
+              <div className="font-semibold text-white leading-snug">{missionHud.stepText}</div>
+              {missionHud.detail && <div className="text-[11px] text-slate-300">{missionHud.detail}</div>}
+              {missionHud.progress !== null && (
+                <div className="h-1.5 bg-slate-800 rounded overflow-hidden">
+                  <div
+                    className="h-full bg-[#F59E0B] transition-[width] duration-150"
+                    style={{ width: `${Math.round(Math.max(0, Math.min(1, missionHud.progress)) * 100)}%` }}
+                  />
+                </div>
+              )}
+              <div className="text-[11px] text-slate-400 flex items-center gap-1.5 truncate">
+                <Building2 className="w-3 h-3 shrink-0" />
+                <span className="truncate">{missionHud.locationLabel}</span>
               </div>
-              <div className="text-[11px] text-slate-400 truncate">{convoyStatusText}</div>
-              <div className="text-[11px] font-mono text-slate-300">
-                Press <span className="text-[#F59E0B] font-semibold">[M]</span> for Bigger Map &amp; Orders
-              </div>
+              <div className="text-[11px] text-slate-500 truncate">{convoyStatusText}</div>
             </div>
           </div>
 
@@ -2864,11 +2862,11 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                       Next: <span className="font-semibold">{nextUpgradeToDisplay.name}</span>{' '}
                       {readyUpgrades.length > 0 ? (
                         <span className="text-emerald-400 font-mono font-semibold">
-                          (READY — Press E at APC)
+                          (ready — press E at the APC)
                         </span>
                       ) : (
                         <span className="text-slate-400 font-mono">
-                          (Loot Convoy / Clear Target)
+                          (loot crates · finish missions)
                         </span>
                       )}
                     </div>
@@ -2910,7 +2908,10 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                     <strong className="text-white">[4]</strong> Heal
                   </span>
                   <span>
-                    <strong className="text-white">[E]</strong> Loot / APC Upgrade
+                    <strong className="text-white">[E]</strong> Search / Use (hold)
+                  </span>
+                  <span>
+                    <strong className="text-white">[G]</strong> Detonate
                   </span>
                   <span>
                     <strong className="text-white">[F]</strong> Squad Order
