@@ -485,252 +485,54 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     };
     syncAtmospherePreset(atmosphereRef.current);
 
-    // 3. Detailed 224x224 Multi-Biome Terrain, Animated River & Strategic Landmarks
-    const { terrainMesh, waterMesh, updateWaterTime } = buildMultiBiomeTerrainMesh(matLib);
-    scene.add(terrainMesh, waterMesh);
-
+    // 3. The free city of Varos-Meridian: streets, enterable buildings, floors, stairs and loot
+    const cityLayout = getCityLayout();
     const staticPhysics = new StaticWorldPhysics();
     const collidableEnvironment: THREE.Object3D[] = [];
-    const rotatingRadarDishes: THREE.Object3D[] = [];
-
-    for (const lm of THEATER_LANDMARKS) {
-      if (lm.kind === 'BRIDGE') {
-        const bridge = buildRiverBridge(matLib);
-        bridge.position.set(lm.x, RIVER_WATER_LEVEL, lm.z);
-        scene.add(bridge);
-        registerLandmarkAndBridgeColliders(lm, RIVER_WATER_LEVEL, staticPhysics);
-      } else {
-        const { group, rotatingDish } = buildLandmarkComplex(lm, matLib);
-        const ly = sampleWalkableHeight(lm.x, lm.z) - 0.12;
-        group.position.set(lm.x, ly, lm.z);
-        group.rotation.y = lm.rotationY;
-        scene.add(group);
-        registerLandmarkAndBridgeColliders(lm, ly, staticPhysics);
-        if (rotatingDish) rotatingRadarDishes.push(rotatingDish);
-      }
-    }
-
-    // Instanced Multi-Tier Alpine Pine Forest (240 solid trees) & Granite Boulders (120 solid rocks)
-    const treeCount = 240;
-    const trunkGeo = new THREE.CylinderGeometry(0.24, 0.36, 2.75, 8);
-    trunkGeo.translate(0, 1.05, 0);
-    const trunkMat = new THREE.MeshStandardMaterial({ color: '#463527', roughness: 0.92 });
-    const trunkInst = new THREE.InstancedMesh(trunkGeo, trunkMat, treeCount);
-
-    const canopyLowerGeo = new THREE.ConeGeometry(1.52, 3.1, 8);
-    canopyLowerGeo.translate(0, 3.3, 0);
-    const canopyUpperGeo = new THREE.ConeGeometry(1.08, 2.5, 8);
-    canopyUpperGeo.translate(0, 4.85, 0);
-    const canopyMat = new THREE.MeshStandardMaterial({ color: '#26422a', roughness: 0.84 });
-
-    const canopyLowerInst = new THREE.InstancedMesh(canopyLowerGeo, canopyMat, treeCount);
-    const canopyUpperInst = new THREE.InstancedMesh(canopyUpperGeo, canopyMat, treeCount);
-    canopyLowerInst.castShadow = !isSoftwareGl;
-    canopyUpperInst.castShadow = !isSoftwareGl;
-    canopyLowerInst.receiveShadow = true;
-
-    const dummy = new THREE.Object3D();
-    const tint = new THREE.Color();
-    let placedTrees = 0;
-    for (let i = 0; i < 720 && placedTrees < treeCount; i++) {
-      const tx = Math.sin(i * 12.9898) * 145;
-      const tz = Math.cos(i * 78.233) * 145;
-      const distRiv = Math.abs(tz - getRiverCenterZ(tx));
-      const distHw = Math.abs(tz - getHighwayCenterZ(tx));
-      const distCrossRoad = Math.abs(tx - getCrossValleyRoadX(tz));
-      const nearBridgeRamp = BRIDGE_X_COORDS.some(
-        (bx) => Math.abs(tx - bx) < 6.5 && Math.abs(tz - getRiverCenterZ(bx)) < 28
-      );
-      const ty = sampleWalkableHeight(tx, tz);
-      const nearLandmark = THEATER_LANDMARKS.some(
-        (lm) => Math.hypot(tx - lm.x, tz - lm.z) < Math.max(lm.collisionRadius, 9.5) + 5.5
-      );
-      if (
-        distRiv < 11.5 ||
-        distHw < 8.5 ||
-        distCrossRoad < 5.5 ||
-        nearBridgeRamp ||
-        ty > 21.5 ||
-        nearLandmark ||
-        Math.hypot(tx, tz + 10) < 14
-      ) {
-        continue;
-      }
-
-      const scale = 0.78 + ((i * 19) % 45) / 100;
-      dummy.position.set(tx, ty - 0.08, tz);
-      dummy.rotation.set(0, (i * 1.3) % (Math.PI * 2), 0);
-      dummy.scale.setScalar(scale);
-      dummy.updateMatrix();
-
-      trunkInst.setMatrixAt(placedTrees, dummy.matrix);
-      canopyLowerInst.setMatrixAt(placedTrees, dummy.matrix);
-      canopyUpperInst.setMatrixAt(placedTrees, dummy.matrix);
-
-      // Solid bark trunk collider + dense pine canopy ballistic/jump collider
-      staticPhysics.addCylinder({
-        id: `tree-trunk-${placedTrees}`,
-        cx: tx,
-        cz: tz,
-        radius: 0.4 * scale,
-        minY: ty - 0.8,
-        maxY: ty + 2.35 * scale,
-        material: 'WOOD',
-        walkableTop: false,
-      });
-      staticPhysics.addCylinder({
-        id: `tree-canopy-${placedTrees}`,
-        cx: tx,
-        cz: tz,
-        radius: 0.82 * scale,
-        minY: ty + 2.15 * scale,
-        maxY: ty + 5.75 * scale,
-        material: 'WOOD',
-        walkableTop: false,
-      });
-
-      tint.setHSL(0.34 + ((i % 7) - 3) * 0.012, 0.34, 0.17 + (i % 5) * 0.022);
-      canopyLowerInst.setColorAt(placedTrees, tint);
-      canopyUpperInst.setColorAt(placedTrees, tint);
-      placedTrees++;
-    }
-    trunkInst.count = placedTrees;
-    canopyLowerInst.count = placedTrees;
-    canopyUpperInst.count = placedTrees;
-    trunkInst.instanceMatrix.needsUpdate = true;
-    canopyLowerInst.instanceMatrix.needsUpdate = true;
-    canopyUpperInst.instanceMatrix.needsUpdate = true;
-    if (canopyLowerInst.instanceColor) canopyLowerInst.instanceColor.needsUpdate = true;
-    if (canopyUpperInst.instanceColor) canopyUpperInst.instanceColor.needsUpdate = true;
-    trunkInst.computeBoundingSphere();
-    canopyLowerInst.computeBoundingSphere();
-    canopyUpperInst.computeBoundingSphere();
-    scene.add(trunkInst, canopyLowerInst, canopyUpperInst);
-
-    const rockCount = 120;
-    const rockGeo = new THREE.DodecahedronGeometry(1.22, 0);
-    rockGeo.translate(0, 0.55, 0);
-    const rockMat = new THREE.MeshStandardMaterial({
-      color: '#59616b',
-      bumpMap: matLib.terrainDetailBump,
-      bumpScale: 0.14,
-      roughness: 0.85,
-      metalness: 0.08,
+    const appliedLooted = new Set<string>(campaignRef.current.lootedIds);
+    const appliedDestroyed = new Set<string>(campaignRef.current.destroyedBuildingIds);
+    const city = buildCityScene(cityLayout, staticPhysics, {
+      castShadows: !isSoftwareGl,
+      concreteBump: matLib.concreteBump,
+      lootedIds: appliedLooted,
+      destroyedIds: appliedDestroyed,
     });
-    const rockInst = new THREE.InstancedMesh(rockGeo, rockMat, rockCount);
-    rockInst.castShadow = !isSoftwareGl;
-    rockInst.receiveShadow = true;
+    scene.add(city.root);
 
-    let placedRocks = 0;
-    for (let i = 0; i < 440 && placedRocks < rockCount; i++) {
-      const rx = Math.cos(i * 41.31) * 146;
-      const rz = Math.sin(i * 93.17) * 146;
-      const distHw = Math.abs(rz - getHighwayCenterZ(rx));
-      const distCrossRoad = Math.abs(rx - getCrossValleyRoadX(rz));
-      const nearBridgeRamp = BRIDGE_X_COORDS.some(
-        (bx) => Math.abs(rx - bx) < 6.0 && Math.abs(rz - getRiverCenterZ(bx)) < 27
-      );
-      const nearLandmark = THEATER_LANDMARKS.some(
-        (lm) => Math.hypot(rx - lm.x, rz - lm.z) < Math.max(lm.collisionRadius, 9.0) + 4.5
-      );
-      if (
-        distHw < 7.5 ||
-        distCrossRoad < 5.0 ||
-        nearBridgeRamp ||
-        nearLandmark ||
-        Math.hypot(rx, rz + 10) < 12
-      ) {
-        continue;
-      }
-      const ry = sampleWalkableHeight(rx, rz);
-      if (ry < RIVER_WATER_LEVEL + 0.35) continue;
-
-      const rotX = ((i % 5) - 2) * 0.04;
-      const rotY = (i * 1.9) % (Math.PI * 2);
-      const rotZ = ((i % 3) - 1) * 0.04;
-      const sx = 0.85 + (i % 5) * 0.32;
-      const sy = 0.72 + (i % 4) * 0.26;
-      const sz = 0.88 + (i % 3) * 0.3;
-
-      dummy.position.set(rx, ry - 0.28, rz);
-      dummy.rotation.set(rotX, rotY, rotZ);
-      dummy.scale.set(sx, sy, sz);
-      dummy.updateMatrix();
-      rockInst.setMatrixAt(placedRocks, dummy.matrix);
-
-      staticPhysics.addBox({
-        id: `rock-${placedRocks}`,
-        cx: rx,
-        cz: rz,
-        widthX: 2.28 * sx,
-        depthZ: 2.28 * sz,
-        cornerRadius: 0.62 * Math.min(sx, sz),
-        yaw: rotY,
-        minY: ry - 1.0,
-        maxY: ry - 0.28 + 1.62 * sy,
-        material: 'ROCK',
-        walkableTop: true,
-      });
-
-      placedRocks++;
-    }
-    rockInst.count = placedRocks;
-    rockInst.instanceMatrix.needsUpdate = true;
-    rockInst.computeBoundingSphere();
-    scene.add(rockInst);
-
-    // 4. Dynamic 50-Objective 3D World Beacons (Rebuilds cleanly whenever run seed changes!)
-    const objectiveMarkersGroup = new THREE.Group();
-    scene.add(objectiveMarkersGroup);
-    const beaconGeo = new THREE.CylinderGeometry(0.12, 0.12, 13, 8);
-    beaconGeo.translate(0, 6.5, 0);
-    const beaconMatDefault = new THREE.MeshBasicMaterial({
+    // 4. Mission markers: waypoint beam, action ring, planted charge
+    const beaconGeo = new THREE.CylinderGeometry(0.14, 0.14, 26, 8);
+    beaconGeo.translate(0, 13, 0);
+    const beaconMat = new THREE.MeshBasicMaterial({
       color: '#f59e0b',
       transparent: true,
-      opacity: 0.32,
+      opacity: 0.38,
       depthWrite: false,
     });
-    const beaconMatPinned = new THREE.MeshBasicMaterial({
-      color: '#38bdf8',
-      transparent: true,
-      opacity: 0.68,
-      depthWrite: false,
-    });
-    const ringGeo = new THREE.RingGeometry(2.1, 2.55, 24);
+    const waypointBeam = new THREE.Mesh(beaconGeo, beaconMat);
+    waypointBeam.visible = false;
+    scene.add(waypointBeam);
+
+    const ringGeo = new THREE.RingGeometry(1.2, 1.5, 28);
     ringGeo.rotateX(-Math.PI / 2);
-    const ringMatDefault = new THREE.MeshBasicMaterial({
-      color: '#f59e0b',
-      side: THREE.DoubleSide,
-    });
-    const ringMatPinned = new THREE.MeshBasicMaterial({
-      color: '#38bdf8',
-      side: THREE.DoubleSide,
-    });
+    const ringMat = new THREE.MeshBasicMaterial({ color: '#38bdf8', side: THREE.DoubleSide, transparent: true, opacity: 0.85 });
+    const actionRing = new THREE.Mesh(ringGeo, ringMat);
+    actionRing.visible = false;
+    scene.add(actionRing);
 
-    const objectiveMarkerMap = new Map<
-      string,
-      { group: THREE.Group; pillar: THREE.Mesh; ring: THREE.Mesh }
-    >();
-    let builtObjectiveFirstUid = '';
-
-    const rebuildObjectiveBeacons = (objs: TheaterObjective[]) => {
-      objectiveMarkersGroup.clear();
-      objectiveMarkerMap.clear();
-      builtObjectiveFirstUid = objs[0]?.uid ?? '';
-
-      for (const obj of objs) {
-        const g = new THREE.Group();
-        const pillar = new THREE.Mesh(beaconGeo, beaconMatDefault);
-        const baseRing = new THREE.Mesh(ringGeo, ringMatDefault);
-        baseRing.position.y = 0.14;
-        g.add(pillar, baseRing);
-        g.position.set(obj.worldX, obj.worldY, obj.worldZ);
-        g.visible = obj.status !== ObjectiveStatus.COMPLETED;
-        objectiveMarkersGroup.add(g);
-        objectiveMarkerMap.set(obj.uid, { group: g, pillar, ring: baseRing });
-      }
-    };
-    rebuildObjectiveBeacons(objectivesRef.current);
+    const bombGroup = new THREE.Group();
+    const bombBody = new THREE.Mesh(
+      new THREE.BoxGeometry(0.7, 0.45, 0.45),
+      new THREE.MeshStandardMaterial({ color: '#3b3f2e', roughness: 0.8 })
+    );
+    bombBody.position.y = 0.23;
+    const bombLight = new THREE.Mesh(
+      new THREE.SphereGeometry(0.07, 8, 8),
+      new THREE.MeshBasicMaterial({ color: '#ef4444' })
+    );
+    bombLight.position.set(0.2, 0.5, 0);
+    bombGroup.add(bombBody, bombLight);
+    bombGroup.visible = false;
+    scene.add(bombGroup);
 
     // 5. Build All Faction-Dependent Actors (Player, 1st-Person Rig, Squad APC, Squad Riflemen, Enemy Convoy Column & Patrols)
     let currentBuiltFaction = factionRef.current;
