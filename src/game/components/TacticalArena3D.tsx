@@ -837,6 +837,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           hp: combatRef.current.hp,
           enemies: enemies.filter((e) => e.alive).map((e) => ({ kind: e.kind, x: e.rig.root.position.x, y: e.rig.root.position.y, z: e.rig.root.position.z })),
           hud: { ...directorHud },
+          musicPhase: musicEngine.getPhase(),
         }),
         building: (id: string) => cityLayout.byId.get(id),
         /** Kills the convoy between frames — the same timing as a bullet kill (after the director ran). */
