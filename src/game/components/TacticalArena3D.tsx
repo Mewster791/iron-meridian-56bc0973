@@ -1756,11 +1756,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
               enemy.hp -= swingDmg;
               _tmpVecB.copy(enemy.rig.root.position).setY(enemy.rig.root.position.y + 1.15);
               spawnImpactSparks(_tmpVecB, 7, false);
-              if (enemy.hp <= 0) {
-                enemy.alive = false;
-                enemy.respawnTimer = 15.0;
-                enemy.rig.root.visible = false;
-              }
+              if (enemy.hp <= 0) killEnemy(enemy);
             }
           }
         });
@@ -1879,7 +1875,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         );
       }
 
-      // E. Update 3-Vehicle Enemy Armored Supply Convoy along Valley Highway
+      // E. Update 3-Vehicle Consortium Convoy along Grand Avenue
       const positionHighwayVehicle = (obj3d: THREE.Object3D, hx: number) => {
         const hz = getHighwayCenterZ(hx);
         const nextHz = getHighwayCenterZ(hx + 1.8);
@@ -1890,7 +1886,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
 
       if (convoyHp > 0) {
         convoyX += 5.0 * dt;
-        if (convoyX > 125) convoyX = -125;
+        if (convoyX > PLAYABLE_HALF_EXTENT) convoyX = -PLAYABLE_HALF_EXTENT;
 
         positionHighwayVehicle(convoyLeadEscort.root, convoyX + 11.5);
         positionHighwayVehicle(convoyTruckMesh, convoyX);
@@ -1906,12 +1902,12 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       } else {
         convoyDestroyedCooldown -= dt;
         if (convoyDestroyedCooldown <= 0) {
-          convoyHp = 280;
-          convoyX = -118;
+          convoyHp = CONVOY_MAX_HP;
+          convoyX = -PLAYABLE_HALF_EXTENT;
           convoyLeadEscort.root.visible = true;
           convoyTruckMesh.visible = true;
           convoyRearEscort.root.visible = true;
-          setConvoyStatusText('Reinforced Enemy Supply Convoy Entered North Highway');
+          setConvoyStatusText('A fresh Consortium convoy entered Grand Avenue');
         }
       }
 
@@ -2005,7 +2001,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           );
           staticPhysics.resolveHorizontalBody(op.root.position, op.root.position.y, 1.75, 0.45);
 
-          op.root.position.y = sampleWalkableHeight(op.root.position.x, op.root.position.z);
+          op.root.position.y = sampleCitySupport(op.root.position.x, op.root.position.z, op.root.position.y);
           const actualMove = Math.hypot(op.root.position.x - prevOx, op.root.position.z - prevOz);
           if (actualMove > 0.002) {
             op.root.rotation.y = Math.atan2(
@@ -2030,7 +2026,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         squadFireAccum = 0;
         squadVehicle.turretGroup.getWorldPosition(_tmpVecA);
         const liveEnemy = enemies.find((e) => {
-          if (!e.alive) return false;
+          if (!e.alive || (e.kind !== 'STREET' && e.kind !== 'WAVE')) return false;
           if (e.rig.root.position.distanceTo(squadVehicle.root.position) >= 64) return false;
           _tmpVecD.set(
             e.rig.root.position.x,
@@ -2051,49 +2047,92 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         }
       }
 
-      // G. Enemy Patrols (Step-Based Solid Movement + LOS-Gated Engagement)
-      enemies.forEach((enemy, idx) => {
-        if (!enemy.alive) {
-          enemy.respawnTimer -= dt;
-          if (enemy.respawnTimer <= 0) {
-            enemy.alive = true;
-            enemy.hp = enemy.maxHp;
-            enemy.rig.root.visible = true;
-            const respPos = { x: enemy.patrolOrigin.x, z: enemy.patrolOrigin.z };
-            staticPhysics.resolveHorizontalBody(respPos, enemy.patrolOrigin.y, 1.75, 0.5);
-            enemy.rig.root.position.set(
-              respPos.x,
-              sampleWalkableHeight(respPos.x, respPos.z),
-              respPos.z
-            );
+      // G. Mission director + enemy AI (street patrols, floor garrisons, guards, targets, assault waves)
+      const playerBuilding = findBuildingAt(_playerPos.x, _playerPos.z, 0.1);
+      const playerFloor = playerBuilding ? getFloorAt(playerBuilding, _playerPos.y) : -1;
+      if (!simPausedRef.current) {
+        updateDirector(dt, playerBuilding, playerFloor, !!keysDown['KeyE'], detonateJustPressed);
+      }
+      detonateJustPressed = false;
+
+      if (dt > 0) {
+        streetSlots.forEach((slot, idx) => {
+          const dist = Math.hypot(slot.x - _playerPos.x, slot.z - _playerPos.z);
+          if (!slot.enemy) {
+            slot.respawn -= dt;
+            if (slot.respawn <= 0 && dist > 50 && dist < 105) {
+              slot.enemy = spawnEnemy({ kind: 'STREET', x: slot.x, z: slot.z, y: 0, bounds: null, floor: 0 });
+              streetSlotOf.set(slot.enemy, idx);
+            }
+          } else if (dist > 135) {
+            streetSlotOf.delete(slot.enemy);
+            despawnEnemy(slot.enemy);
+            slot.enemy = null;
+            slot.respawn = 0;
           }
-          return;
+        });
+      }
+
+      const playerIndoors = playerBuilding !== null;
+      enemies.forEach((enemy, idx) => {
+        if (!enemy.alive || dt <= 0) return;
+        const pos = enemy.rig.root.position;
+        const distToPlayer = pos.distanceTo(_playerPos);
+        if (distToPlayer > 125) return;
+
+        const outdoorKind = enemy.kind === 'STREET' || enemy.kind === 'WAVE';
+        const engageRange = outdoorKind && !playerIndoors ? 55 : 34;
+        enemy.losTimer -= dt;
+        if (enemy.losTimer <= 0) {
+          enemy.losTimer = 0.25;
+          if (distToPlayer < engageRange) {
+            _tmpVecA.set(pos.x, pos.y + 1.45, pos.z);
+            _tmpVecD.set(_playerPos.x, _playerPos.y + 1.3, _playerPos.z);
+            enemy.hasLos = staticPhysics.hasLineOfSight(_tmpVecA, _tmpVecD, sampleWalkableHeight);
+          } else {
+            enemy.hasLos = false;
+          }
         }
 
-        if (dt > 0) {
-          enemy.patrolPhase += dt * 0.75;
-          const desiredPx = enemy.patrolOrigin.x + Math.sin(enemy.patrolPhase + idx * 1.7) * 4.2;
-          const desiredPz =
-            enemy.patrolOrigin.z + Math.cos(enemy.patrolPhase * 0.85 + idx * 2.1) * 3.2;
-
-          const pdx = desiredPx - enemy.rig.root.position.x;
-          const pdz = desiredPz - enemy.rig.root.position.z;
-          const pDist = Math.hypot(pdx, pdz);
-          if (pDist > 0.05) {
-            const pStep = Math.min(pDist, 3.2 * dt);
-            enemy.rig.root.position.x += (pdx / pDist) * pStep;
-            enemy.rig.root.position.z += (pdz / pDist) * pStep;
+        // Movement
+        let tx = pos.x;
+        let tz = pos.z;
+        let speed = 1.6;
+        if (enemy.chase) {
+          if (distToPlayer > 13) {
+            tx = _playerPos.x;
+            tz = _playerPos.z;
+            speed = 3.6;
           }
-
-          staticPhysics.resolveHorizontalBody(
-            enemy.rig.root.position,
-            enemy.rig.root.position.y,
-            1.75,
-            0.45
-          );
+        } else if (enemy.hasLos && distToPlayer < 22 && enemy.kind !== 'STREET') {
+          if (distToPlayer > 6) {
+            tx = _playerPos.x;
+            tz = _playerPos.z;
+            speed = 2.6;
+          }
+        } else {
+          enemy.patrolPhase += dt * 0.6;
+          tx = enemy.patrolOrigin.x + Math.sin(enemy.patrolPhase + idx * 1.7) * 3.2;
+          tz = enemy.patrolOrigin.z + Math.cos(enemy.patrolPhase * 0.85 + idx * 2.1) * 2.6;
+        }
+        if (enemy.bounds) {
+          tx = THREE.MathUtils.clamp(tx, enemy.bounds.minX, enemy.bounds.maxX);
+          tz = THREE.MathUtils.clamp(tz, enemy.bounds.minZ, enemy.bounds.maxZ);
+        }
+        const mdx = tx - pos.x;
+        const mdz = tz - pos.z;
+        const mDist = Math.hypot(mdx, mdz);
+        const moving = mDist > 0.08;
+        if (moving) {
+          const stepLen = Math.min(mDist, speed * dt);
+          pos.x += (mdx / mDist) * stepLen;
+          pos.z += (mdz / mDist) * stepLen;
+        }
+        staticPhysics.resolveHorizontalBody(pos, enemy.floorY, 1.75, 0.45);
+        if (outdoorKind) {
           resolveDynamicBoxCollision(
-            enemy.rig.root.position,
-            enemy.rig.root.position.y,
+            pos,
+            pos.y,
             0.45,
             squadVehicle.root.position.x,
             squadVehicle.root.position.y,
@@ -2103,63 +2142,31 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
             3.28,
             squadVehicle.root.rotation.y
           );
-          if (convoyHp > 0) {
-            for (const cv of [convoyLeadEscort.root, convoyTruckMesh, convoyRearEscort.root]) {
-              resolveDynamicBoxCollision(
-                enemy.rig.root.position,
-                enemy.rig.root.position.y,
-                0.45,
-                cv.position.x,
-                cv.position.y,
-                cv.position.z,
-                1.48,
-                2.8,
-                3.28,
-                cv.rotation.y
-              );
-            }
-          }
-          staticPhysics.resolveHorizontalBody(
-            enemy.rig.root.position,
-            enemy.rig.root.position.y,
-            1.75,
-            0.45
-          );
-
-          enemy.rig.root.position.y = sampleWalkableHeight(
-            enemy.rig.root.position.x,
-            enemy.rig.root.position.z
-          );
-          const legSwing = Math.sin(elapsed * 6.5 + idx) * 0.34;
-          enemy.rig.leftLegPivot.rotation.x = legSwing;
-          enemy.rig.rightLegPivot.rotation.x = -legSwing;
+          staticPhysics.resolveHorizontalBody(pos, enemy.floorY, 1.75, 0.45);
         }
+        pos.y = enemy.floorY;
+        const legSwing = moving ? Math.sin(elapsed * 7 + idx) * 0.38 : 0;
+        enemy.rig.leftLegPivot.rotation.x = legSwing;
+        enemy.rig.rightLegPivot.rotation.x = -legSwing;
 
-        const px = enemy.rig.root.position.x;
-        const pz = enemy.rig.root.position.z;
-        const distToPlayer = enemy.rig.root.position.distanceTo(_playerPos);
-        if (distToPlayer < 58 && dt > 0) {
-          const dx = _playerPos.x - px;
-          const dz = _playerPos.z - pz;
-          enemy.rig.root.rotation.y = Math.atan2(-dx, -dz);
-
+        if (enemy.hasLos) {
+          enemy.rig.root.rotation.y = Math.atan2(-(_playerPos.x - pos.x), -(_playerPos.z - pos.z));
           enemy.fireTimer -= dt;
           if (enemy.fireTimer <= 0) {
-            enemy.fireTimer = 1.65 + (idx % 3) * 0.45;
-            _tmpVecA.set(px, enemy.rig.root.position.y + 1.38, pz);
-            _tmpVecD.set(_playerPos.x, _playerPos.y + 1.15, _playerPos.z);
-
-            if (staticPhysics.hasLineOfSight(_tmpVecA, _tmpVecD, sampleWalkableHeight)) {
-              _tmpVecB
-                .set(
-                  _playerPos.x - px + Math.sin(elapsed * 19 + idx) * 1.4,
-                  _playerPos.y + 1.1 - _tmpVecA.y,
-                  _playerPos.z - pz + Math.cos(elapsed * 23 + idx) * 1.4
-                )
-                .normalize();
-              spawnTracer(_tmpVecA, _tmpVecB, false, 11);
-            }
+            enemy.fireTimer = (enemy.kind === 'HVT' ? 0.85 : 1.35) + Math.random() * 0.9;
+            _tmpVecA.set(pos.x, pos.y + 1.45, pos.z);
+            const spread = 0.5 + distToPlayer * 0.03;
+            _tmpVecB
+              .set(
+                _playerPos.x - pos.x + (Math.random() - 0.5) * spread * 2,
+                _playerPos.y + 1.15 - _tmpVecA.y + (Math.random() - 0.5) * spread,
+                _playerPos.z - pos.z + (Math.random() - 0.5) * spread * 2
+              )
+              .normalize();
+            spawnTracer(_tmpVecA, _tmpVecB, false, enemy.damage);
           }
+        } else if (moving) {
+          enemy.rig.root.rotation.y = Math.atan2(-mdx, -mdz);
         }
       });
 
@@ -2213,6 +2220,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
               spawnImpactSparks(truckHits[0].point, 4, false);
               convoyHp -= tr.damage;
               if (convoyHp <= 0) {
+                convoyKilledThisFrame = true;
                 audioEngine.playExplosion();
                 camControllerRef.current.applyCombatImpulse(0.04, 0, 0.25);
                 spawnImpactSparks(convoyTruckMesh.position, 18, true);
@@ -2240,7 +2248,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                   collected: false,
                 });
                 setConvoyStatusText(
-                  'CONVOY DESTROYED! Captured Tech Crate Dropped on Highway (Approach & Press E)'
+                  'Convoy destroyed — salvage crate dropped on Grand Avenue (press E)'
                 );
               }
             }
@@ -2269,11 +2277,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                 _tmpVecC.copy(tr.mesh.position).addScaledVector(_velDir, hitProj);
                 spawnImpactSparks(_tmpVecC, 5, false);
                 enemy.hp -= tr.damage;
-                if (enemy.hp <= 0) {
-                  enemy.alive = false;
-                  enemy.respawnTimer = 15.0;
-                  enemy.rig.root.visible = false;
-                }
+                if (enemy.hp <= 0) killEnemy(enemy);
                 break;
               }
             }
