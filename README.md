@@ -1,24 +1,13 @@
-# Iron Meridian
+Iron Meridian
 
 Imported website: https://github.com/Mewster791/Iron-Meridian
 
-This project was built with [Lovable](https://lovable.dev).
+Version 0.3
 
-## Build with Lovable
+Update logs:
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/4d77a951-09ee-4447-a29e-10b86527d4d1).
+(dd/mm/yyyy)
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
-
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
-```
+Version 0.1----3/11/2026----Raw project.
+Version 0.2----3/11/2026----Map fixes.
+Version 0.3----4/11/2026----Massive rework, lore, and missioins.
