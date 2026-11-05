@@ -23,6 +23,8 @@ import { TacticalMenuOverlay } from './components/TacticalMenuOverlay';
 import { HomeScreen, SaveSummary } from './components/HomeScreen';
 import { MissionBriefing } from './components/MissionBriefing';
 import { audioEngine } from './systems/audioEngine';
+import { musicEngine } from './systems/musicEngine';
+import { Music2, VolumeX as MusicOff } from 'lucide-react';
 import {
   CampaignSave,
   buildCampaignSave,
@@ -231,6 +233,31 @@ export default function App() {
 
   const showBriefing = isRoundActive && (debrief !== null || (!campaign.briefingSeen && getCurrentMission(campaign) !== null));
   const simPaused = isMenuOpen || showBriefing || testerStage !== 'closed';
+
+  // ---- adaptive score: Phase 1 on home / map / briefings, Phase 4 on the mission debrief ----
+  const [musicMuted, setMusicMuted] = useState(false);
+  useEffect(() => {
+    setMusicMuted(musicEngine.isMuted());
+    // Browsers only allow audio after the first click or key press.
+    const unlock = () => musicEngine.start();
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
+  useEffect(() => {
+    if (!isRoundActive) musicEngine.setContext('HOME');
+    else if (debrief !== null) musicEngine.setContext('VICTORY');
+    else if (simPaused) musicEngine.setContext('MAP');
+    else musicEngine.setContext('PLAYING');
+  }, [isRoundActive, debrief, simPaused]);
+  const toggleMusic = () => {
+    const next = !musicEngine.isMuted();
+    musicEngine.setMuted(next);
+    setMusicMuted(next);
+  };
 
   // Play-time clock (only while actually playing).
   useEffect(() => {
@@ -537,6 +564,18 @@ export default function App() {
           onSignIn={handleSignIn}
           onSignOut={handleSignOut}
         />
+      )}
+
+      {!isRoundActive && (
+        <button
+          type="button"
+          onClick={toggleMusic}
+          aria-label={musicMuted ? 'Turn music on' : 'Turn music off'}
+          className="fixed top-4 right-4 z-40 flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#11161F]/90 border border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition-colors cursor-pointer"
+        >
+          {musicMuted ? <MusicOff className="w-3.5 h-3.5" /> : <Music2 className="w-3.5 h-3.5" />}
+          <span>{musicMuted ? 'Music off' : 'Music on'}</span>
+        </button>
       )}
 
       {testerStage === 'password' && (
