@@ -1220,6 +1220,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     let quickMeleeJustPressed = false;
     let healJustPressed = false;
     let interactJustPressed = false;
+    let detonateJustPressed = false;
     let verticalVel = 0;
     let playerGrounded = true;
     let isDraggingLook = false;
@@ -1254,6 +1255,8 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           healJustPressed = true;
         } else if (e.code === 'KeyE') {
           interactJustPressed = true;
+        } else if (e.code === 'KeyG') {
+          detonateJustPressed = true;
         } else if (e.code === 'KeyF') {
           handleCycleSquadOrder();
         } else if (e.code === 'KeyH') {
@@ -1376,26 +1379,39 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       syncAtmospherePreset(atmosphereRef.current);
       skyDome.uniforms.uTime.value = elapsed;
       skyDome.mesh.position.copy(camera.position);
-      updateWaterTime(elapsed);
+      simTime += dt;
+      convoyKilledThisFrame = false;
 
-      rotatingRadarDishes.forEach((dish) => {
-        dish.rotation.y += dt * 1.1;
-      });
+      // Apply loot / demolitions restored from a loaded or cloud save.
+      const prog = campaignRef.current;
+      if (prog.lootedIds.length !== appliedLooted.size) {
+        for (const id of prog.lootedIds) {
+          if (!appliedLooted.has(id)) {
+            appliedLooted.add(id);
+            city.hideLoot(id);
+          }
+        }
+      }
+      if (prog.destroyedBuildingIds.length !== appliedDestroyed.size) {
+        for (const id of prog.destroyedBuildingIds) {
+          const bld = cityLayout.byId.get(id);
+          if (bld && !appliedDestroyed.has(id)) {
+            appliedDestroyed.add(id);
+            city.setBuildingDestroyed(bld);
+          }
+        }
+      }
 
       // Handle Fast-Deploy Request from M Tactical Map Menu (with solid obstacle push-out)
       if (deployReqRef.current && deployReqRef.current.nonce !== processedDeployNonce) {
         processedDeployNonce = deployReqRef.current.nonce;
         const pDep = {
-          x: THREE.MathUtils.clamp(deployReqRef.current.x, -142, 142),
-          z: THREE.MathUtils.clamp(deployReqRef.current.z, -142, 142),
+          x: THREE.MathUtils.clamp(deployReqRef.current.x, -PLAYABLE_HALF_EXTENT, PLAYABLE_HALF_EXTENT),
+          z: THREE.MathUtils.clamp(deployReqRef.current.z, -PLAYABLE_HALF_EXTENT, PLAYABLE_HALF_EXTENT),
         };
-        staticPhysics.resolveHorizontalBody(
-          pDep,
-          sampleWalkableHeight(pDep.x, pDep.z),
-          1.75,
-          0.55
-        );
-        _playerPos.set(pDep.x, sampleWalkableHeight(pDep.x, pDep.z), pDep.z);
+        const depY = sampleCitySupport(pDep.x, pDep.z, deployReqRef.current.y ?? 0);
+        staticPhysics.resolveHorizontalBody(pDep, depY, 1.75, 0.55);
+        _playerPos.set(pDep.x, depY, pDep.z);
         verticalVel = 0;
 
         const vDep = { x: pDep.x - 7, z: pDep.z - 5 };
@@ -1437,7 +1453,13 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         collidableEnvironment.push(squadVehicle.root);
 
         buildSquadRiflemen(currentBuiltFaction);
-        rebuildEnemyActors(enemyFaction);
+        for (let i = enemies.length - 1; i >= 0; i--) despawnEnemy(enemies[i]);
+        streetSlots.forEach((slot) => {
+          slot.enemy = null;
+          slot.respawn = 0;
+        });
+        streetSlotOf.clear();
+        d.key = '';
 
         convoyLeadEscort = buildSquadCommandVehicle(enemyFaction, matLib);
         convoyTruckMesh = buildConvoySupplyTruck(enemyFaction);
@@ -1448,20 +1470,6 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           convoyTruckMesh,
           convoyRearEscort.root
         );
-      }
-
-      // Rebuild 50-objective beacons if run seed changed, and update completion/pinned highlights
-      if ((objectivesRef.current[0]?.uid ?? '') !== builtObjectiveFirstUid) {
-        rebuildObjectiveBeacons(objectivesRef.current);
-      }
-      for (const obj of objectivesRef.current) {
-        const entry = objectiveMarkerMap.get(obj.uid);
-        if (entry) {
-          entry.group.visible = obj.status !== ObjectiveStatus.COMPLETED;
-          const isPinned = pinnedUidRef.current === obj.uid;
-          entry.pillar.material = isPinned ? beaconMatPinned : beaconMatDefault;
-          entry.ring.material = isPinned ? ringMatPinned : ringMatDefault;
-        }
       }
 
       // Sync Squad Command Vehicle visual retrofit modules
