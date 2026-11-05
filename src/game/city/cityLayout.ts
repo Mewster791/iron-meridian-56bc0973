@@ -299,14 +299,9 @@ function buildBuilding(
     ];
     for (const [a, b] of segs) {
       if (b - a > 0.1) walls.push({ cx: partitionX, cz: (a + b) / 2, sx: 0.2, sz: b - a, y0, y1: y0 + H - 0.02, kind: 'INTERIOR' });
-      walls.push({ cx: partitionX, cz: doorA, sx: 0.2, sz: dw, y0: y0 + 2.3, y1: y0 + H - 0.02, kind: 'INTERIOR' });
-      walls.push({ cx: partitionX, cz: doorB, sx: 0.2, sz: dw, y0: y0 + 2.3, y1: y0 + H - 0.02, kind: 'INTERIOR' });
-      break;
     }
-    // remaining two partition segments
-    for (let s = 1; s < segs.length; s++) {
-      const [a, b] = segs[s];
-      if (b - a > 0.1) walls.push({ cx: partitionX, cz: (a + b) / 2, sx: 0.2, sz: b - a, y0, y1: y0 + H - 0.02, kind: 'INTERIOR' });
+    for (const dz of [doorA, doorB]) {
+      walls.push({ cx: partitionX, cz: dz, sx: 0.2, sz: dw, y0: y0 + 2.3, y1: y0 + H - 0.02, kind: 'INTERIOR' });
     }
 
     if (bigEast) {
