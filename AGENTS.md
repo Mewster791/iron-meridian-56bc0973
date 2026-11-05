@@ -14,5 +14,5 @@
 - Campaign saves are written to browser localStorage first (`src/game/systems/campaignSaveSystem.ts`); signed-in players (Google via Lovable Cloud) also sync to the owner-only `campaign_saves` table through `src/game/systems/cloudSave.ts`, newest `savedAt` wins — guests must always be able to play without an account.
 - The city is generated deterministically from data in `src/game/city/cityLayout.ts` (buildings, floors, rooms, stairs, loot ids) and rendered/collided by `cityBuilder.ts`; loot and building ids must stay stable because saves reference them.
 - Mission/story data lives in `src/game/campaign/campaignData.ts`; pacing and step rules are pure functions in `campaignRules.ts` with vitest coverage — the 3D arena's mission director only calls them, so change rules there and update the tests.
-- `TacticalArena3D` exposes a dev-only `window.__game` hook (`teleport`, `state`, `building`, `killNear`) for Playwright checks; it is gated by `import.meta.env.DEV`.
+- `TacticalArena3D` exposes a dev-only `window.__game` hook (`teleport`, `state`, `building`, `killNear`, `destroyConvoy`) for Playwright checks; it is gated by `import.meta.env.DEV`.
 - `tsconfig.json` disables noUncheckedIndexedAccess, noPropertyAccessFromIndexSignature and exactOptionalPropertyTypes to match the ported game code, which was written without them.

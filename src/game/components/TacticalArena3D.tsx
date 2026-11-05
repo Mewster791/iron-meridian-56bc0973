@@ -838,6 +838,10 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           hud: { ...directorHud },
         }),
         building: (id: string) => cityLayout.byId.get(id),
+        /** Kills the convoy between frames — the same timing as a bullet kill (after the director ran). */
+        destroyConvoy: () => {
+          if (convoyHp > 0) destroyConvoy();
+        },
         killNear: (radius = 25) => {
           for (const e of enemies) if (e.alive && e.rig.root.position.distanceTo(_playerPos) < radius) killEnemy(e);
         },
