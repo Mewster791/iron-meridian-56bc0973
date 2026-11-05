@@ -89,6 +89,7 @@ import {
 import { canAdvanceRetrofitStage } from '../systems/scavengeRetrofitSystem';
 import { CityMapView } from './CityMapView';
 import { audioEngine } from '../systems/audioEngine';
+import { musicEngine, NEAR_ENEMY_RANGE } from '../systems/musicEngine';
 import {
   Building2,
   ChevronDown,
@@ -836,6 +837,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           hp: combatRef.current.hp,
           enemies: enemies.filter((e) => e.alive).map((e) => ({ kind: e.kind, x: e.rig.root.position.x, y: e.rig.root.position.y, z: e.rig.root.position.z })),
           hud: { ...directorHud },
+          musicPhase: musicEngine.getPhase(),
         }),
         building: (id: string) => cityLayout.byId.get(id),
         /** Kills the convoy between frames — the same timing as a bullet kill (after the director ran). */
@@ -1766,6 +1768,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
 
       if (fsmEvents.firedShot) {
         audioEngine.playRifleShot(factionRef.current === FactionId.WEST);
+        musicEngine.notePlayerFired();
         muzzleFlashTimer = 0.05;
         camControllerRef.current.applyCombatImpulse(
           0.014,
@@ -2171,6 +2174,8 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       }
 
       const playerIndoors = playerBuilding !== null;
+      let musicNear = 0;
+      let musicEngaged = 0;
       enemies.forEach((enemy, idx) => {
         if (!enemy.alive || dt <= 0) return;
         const pos = enemy.rig.root.position;
@@ -2190,6 +2195,8 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
             enemy.hasLos = false;
           }
         }
+        if (distToPlayer < NEAR_ENEMY_RANGE) musicNear++;
+        if (enemy.hasLos) musicEngaged++;
 
         // Movement
         let tx = pos.x;
@@ -2266,6 +2273,16 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           enemy.rig.root.rotation.y = Math.atan2(-mdx, -mdz);
         }
       });
+
+      if (dt > 0) {
+        musicEngine.reportThreat({
+          nearEnemies: musicNear,
+          engagedEnemies: musicEngaged,
+          objectiveDist: directorWaypoint
+            ? Math.hypot(directorWaypoint.x - _playerPos.x, directorWaypoint.z - _playerPos.z)
+            : null,
+        });
+      }
 
       // Helper: closest distance squared from 3D point `target` to ray segment [origin, origin + dir * segLen]
       const segmentHitsSphere = (
@@ -2396,6 +2413,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
               camControllerRef.current.applyCombatImpulse(0.018, 0, 0.08);
               if (!godModeRef.current) {
                 applyIncomingPlayerDamage(combatRef.current, tr.damage, 0.35);
+                musicEngine.notePlayerHit();
                 d.tookDamage = true;
               }
               if (combatRef.current.hp <= 0) {
@@ -3001,6 +3019,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                     onClick={() => {
                       const nextMute = !muted;
                       audioEngine.setMuted(nextMute);
+                      musicEngine.setMuted(nextMute);
                       setMuted(nextMute);
                     }}
                     aria-label={muted ? 'Unmute audio' : 'Mute audio'}
