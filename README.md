@@ -1,8 +1,6 @@
 Iron Meridian
 
-Imported website: https://github.com/Mewster791/Iron-Meridian
-
-Version 0.3
+Current version: Version 0.3
 
 Update logs:
 
