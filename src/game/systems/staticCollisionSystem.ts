@@ -16,6 +16,9 @@ export interface StaticCollider {
   boundingRadius: number;
   material: ColliderMaterial;
   walkableTop: boolean;
+  /** How far below the top an actor's feet may be and still step onto it (slabs, stair landings). */
+  stepUp: number;
+  group: string;
   active: boolean;
 }
 
@@ -32,7 +35,7 @@ export interface RaycastStaticHit {
 }
 
 const CELL_SIZE = 16;
-const HALF_WORLD = 176;
+const HALF_WORLD = 184;
 const GRID_DIM = Math.ceil((HALF_WORLD * 2) / CELL_SIZE); // 22x22 spatial hash grid
 
 /**
@@ -97,6 +100,8 @@ export class StaticWorldPhysics {
     cornerRadius?: number;
     material?: ColliderMaterial;
     walkableTop?: boolean;
+    stepUp?: number;
+    group?: string;
   }): StaticCollider {
     const cr = params.cornerRadius ?? 0;
     const hx = Math.max(0, params.widthX * 0.5 - cr);
@@ -118,6 +123,8 @@ export class StaticWorldPhysics {
       boundingRadius,
       material: params.material ?? 'CONCRETE',
       walkableTop: params.walkableTop ?? true,
+      stepUp: params.stepUp ?? 0.12,
+      group: params.group ?? '',
       active: true,
     };
 
@@ -148,6 +155,8 @@ export class StaticWorldPhysics {
       boundingRadius: params.radius,
       material: params.material ?? 'WOOD',
       walkableTop: params.walkableTop ?? false,
+      stepUp: 0.12,
+      group: '',
       active: true,
     };
 
@@ -172,6 +181,14 @@ export class StaticWorldPhysics {
     }
 
     return col;
+  }
+
+  public setGroupActive(group: string, active: boolean): void {
+    for (let i = 0; i < this.colliders.length; i++) {
+      if (this.colliders[i].group === group) {
+        this.colliders[i].active = active;
+      }
+    }
   }
 
   public setColliderActive(id: string, active: boolean): void {
@@ -215,7 +232,7 @@ export class StaticWorldPhysics {
             if (!col.active) continue;
 
             // Skip if actor is cleanly above top surface or completely below underside
-            if (actorBottomY >= col.maxY - 0.12 || actorTopY <= col.minY + 0.05) {
+            if (actorBottomY >= col.maxY - col.stepUp || actorTopY <= col.minY + 0.05) {
               continue;
             }
 
@@ -317,7 +334,8 @@ export class StaticWorldPhysics {
           // Support from top face if actor was above top face (or low step <= 0.38m)
           if (col.walkableTop) {
             const isLowStep = col.maxY - baseGroundY <= 0.38;
-            if ((prevBottomY >= col.maxY - 0.28 || isLowStep) && col.maxY > supportY) {
+            const stepTol = col.stepUp > 0.28 ? col.stepUp : 0.28;
+            if ((prevBottomY >= col.maxY - stepTol || isLowStep) && col.maxY > supportY) {
               supportY = col.maxY;
             }
           }

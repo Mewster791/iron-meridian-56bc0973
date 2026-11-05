@@ -4,14 +4,25 @@ import {
   FACTION_EMERGENCY_SWORDS,
   FACTION_PRIMARY_FIREARMS,
 } from '../systems/loadoutHealthSystem';
-import { Crosshair, Keyboard, Play, Shield, Sword, X } from 'lucide-react';
+import { Cloud, CloudOff, Crosshair, Keyboard, LogOut, Play, Shield, Sword, X } from 'lucide-react';
+
+export interface SaveSummary {
+  faction: FactionId;
+  missionLabel: string;
+  missionsDone: number;
+  missionsTotal: number;
+  playTime: string;
+}
 
 interface HomeScreenProps {
-  faction: FactionId;
-  onSelectFaction: (faction: FactionId) => void;
-  onBeginRound: () => void;
-  onContinue?: () => void;
-  hasSave?: boolean;
+  onNewCampaign: (faction: FactionId) => void;
+  onContinue: () => void;
+  save: SaveSummary | null;
+  accountEmail: string | null;
+  accountReady: boolean;
+  cloudStatus: string | null;
+  onSignIn: () => void;
+  onSignOut: () => void;
 }
 
 const CONTROLS_LIST: Array<{ action: string; keys: string }> = [
@@ -24,19 +35,35 @@ const CONTROLS_LIST: Array<{ action: string; keys: string }> = [
   { action: 'Reload Rifle', keys: 'R' },
   { action: 'Switch Rifle / Emergency Sword', keys: '1 / 2 (or V Quick Slash)' },
   { action: 'Use Medkit (+HP)', keys: '4' },
-  { action: 'Loot Crate / Install APC Upgrade', keys: 'E' },
+  { action: 'Search crates · rest · use the APC', keys: 'E' },
+  { action: 'Plant a charge / download (hold)', keys: 'Hold E' },
+  { action: 'Detonate a planted charge', keys: 'G' },
   { action: 'Cycle Squad Order', keys: 'F' },
-  { action: 'Open Bigger Map & Mission Target', keys: 'M' },
+  { action: 'Open map, mission & journal', keys: 'M' },
 ];
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
-  faction,
-  onSelectFaction,
-  onBeginRound,
+  onNewCampaign,
   onContinue,
-  hasSave = false,
+  save,
+  accountEmail,
+  accountReady,
+  cloudStatus,
+  onSignIn,
+  onSignOut,
 }) => {
   const [showControls, setShowControls] = useState<boolean>(false);
+  const [faction, onSelectFaction] = useState<FactionId>(save?.faction ?? FactionId.EAST);
+  const [confirmNew, setConfirmNew] = useState(false);
+  const hasSave = !!save;
+  const startNew = () => {
+    if (hasSave && !confirmNew) {
+      setConfirmNew(true);
+      return;
+    }
+    setConfirmNew(false);
+    onNewCampaign(faction);
+  };
 
   const eastGun = FACTION_PRIMARY_FIREARMS[FactionId.EAST];
   const eastSword = FACTION_EMERGENCY_SWORDS[FactionId.EAST];
@@ -57,16 +84,76 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 Iron Meridian
               </h1>
               <p className="text-sm md:text-base text-slate-300 max-w-2xl leading-relaxed">
-                Lead a five-person team through a sprawling fictional country. Explore a continuous
-                urban region, enter buildings, secure districts, rescue civilians, recover supplies,
-                and complete a long-form liberation campaign. Your progress is saved locally.
+                The free city of Varos-Meridian has fallen to the Ashgrove Consortium. Lead your squad
+                street by street through a 16-mission story: storm buildings floor by floor, plant
+                charges, loot every room and uncover who has been funding both sides of the war.
               </p>
+            </div>
+
+            {/* Saved campaign + account */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="rounded-xl p-5 border border-slate-800 bg-[#0B0F15] space-y-2">
+                <div className="text-xs font-mono uppercase tracking-wider text-slate-400">Your campaign</div>
+                {save ? (
+                  <>
+                    <div className="text-white font-semibold">{save.missionLabel}</div>
+                    <div className="text-xs font-mono text-slate-400 tabular-nums">
+                      {save.missionsDone}/{save.missionsTotal} missions · {save.playTime} played ·{' '}
+                      {save.faction === FactionId.EAST ? 'East unit' : 'West unit'}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-sm text-slate-400">No campaign yet. Pick a unit and start below.</div>
+                )}
+              </div>
+              <div className="rounded-xl p-5 border border-slate-800 bg-[#0B0F15] space-y-2.5">
+                <div className="text-xs font-mono uppercase tracking-wider text-slate-400">Save progress online</div>
+                {!accountReady ? (
+                  <div className="text-sm text-slate-500">Checking sign-in…</div>
+                ) : accountEmail ? (
+                  <>
+                    <div className="flex items-center gap-2 text-sm text-emerald-300">
+                      <Cloud className="w-4 h-4 shrink-0" />
+                      <span className="truncate">Saving to {accountEmail}</span>
+                    </div>
+                    {cloudStatus && <div className="text-xs text-slate-400">{cloudStatus}</div>}
+                    <button
+                      type="button"
+                      onClick={onSignOut}
+                      className="text-xs text-slate-300 hover:text-white flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5" /> Sign out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-start gap-2 text-xs text-slate-400">
+                      <CloudOff className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>Playing as a guest — progress lives in this browser only. Sign in to keep it safe and play on any device.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onSignIn}
+                      className="px-4 py-2 rounded-lg bg-white hover:bg-slate-200 text-slate-900 text-sm font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <svg viewBox="0 0 24 24" className="w-4 h-4" aria-hidden="true">
+                        <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.2-2.1 3.5-5.1 3.5-8.8z" />
+                        <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z" />
+                        <path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6H1.3a12 12 0 0 0 0 10.8l4-3.1z" />
+                        <path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z" />
+                      </svg>
+                      Sign in with Google
+                    </button>
+                    {cloudStatus && <div className="text-xs text-red-300">{cloudStatus}</div>}
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Faction / Unit Selection */}
             <div className="space-y-3">
               <div className="text-xs font-mono uppercase tracking-wider text-slate-400">
-                Select Tactical Unit &amp; Starting Loadout
+                {hasSave ? 'New campaign: choose a unit' : 'Choose your unit'}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -148,23 +235,35 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
             {/* Primary Home Actions: Begin Round & Controls */}
             <div className="flex flex-wrap items-center gap-4 pt-2">
-              {hasSave && onContinue && (
+              {hasSave && (
                 <button
                   type="button"
                   onClick={onContinue}
-                  className="px-7 py-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display text-xl font-bold tracking-wider uppercase transition-colors cursor-pointer"
+                  className="px-8 py-4 rounded-xl bg-[#F59E0B] hover:bg-amber-400 text-slate-950 font-display text-xl font-bold tracking-wider uppercase flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
-                  Continue Campaign
+                  <Play className="w-5 h-5 fill-slate-950" />
+                  <span>Continue Campaign</span>
                 </button>
               )}
               <button
                 type="button"
-                onClick={onBeginRound}
-                className="px-8 py-4 rounded-xl bg-[#F59E0B] hover:bg-amber-400 text-slate-950 font-display text-xl font-bold tracking-wider uppercase flex items-center gap-2.5 transition-colors cursor-pointer"
+                onClick={startNew}
+                className={`px-7 py-4 rounded-xl font-display text-xl font-bold tracking-wider uppercase flex items-center gap-2.5 transition-colors cursor-pointer ${
+                  hasSave
+                    ? confirmNew
+                      ? 'bg-red-600 hover:bg-red-500 text-white'
+                      : 'bg-[#161E2B] hover:bg-slate-800 border border-slate-700 text-white'
+                    : 'bg-[#F59E0B] hover:bg-amber-400 text-slate-950'
+                }`}
               >
-                <Play className="w-5 h-5 fill-slate-950" />
-                <span>Begin Round</span>
+                {!hasSave && <Play className="w-5 h-5 fill-slate-950" />}
+                <span>{confirmNew ? 'Erase save & start over?' : 'New Campaign'}</span>
               </button>
+              {confirmNew && (
+                <button type="button" onClick={() => setConfirmNew(false)} className="text-sm text-slate-300 hover:text-white cursor-pointer">
+                  Keep my save
+                </button>
+              )}
 
               <button
                 type="button"
@@ -214,17 +313,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-800">
               <span className="text-xs text-slate-400">
                 Tip: During a round, press <strong className="text-white">[M]</strong> anytime to
-                view the full sector map, active target order, and unit upgrades.
+                open the city map, your mission steps and the story journal.
               </span>
-
-              <button
-                type="button"
-                onClick={onBeginRound}
-                className="px-7 py-3 rounded-xl bg-[#F59E0B] hover:bg-amber-400 text-slate-950 font-display text-lg font-bold tracking-wider uppercase flex items-center gap-2 transition-colors cursor-pointer"
-              >
-                <Play className="w-4 h-4 fill-slate-950" />
-                <span>Begin Round</span>
-              </button>
             </div>
           </div>
         )}
