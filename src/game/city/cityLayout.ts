@@ -323,7 +323,15 @@ function buildBuilding(
       const room = rooms[(k + f) % rooms.length];
       // Place near a room corner so crates sit against walls.
       const cornerX = rng() < 0.5 ? room.minX + 0.6 : room.maxX - 0.6;
-      const cornerZ = room.minZ + 0.8 + rng() * Math.max(0.1, room.maxZ - room.minZ - 1.6);
+      let cornerZ = room.minZ + 0.8 + rng() * Math.max(0.1, room.maxZ - room.minZ - 1.6);
+      // Keep partition doorways and the room divider door free.
+      const pMinZ = footprint.minZ + t;
+      const pMaxZ = footprint.maxZ - t;
+      const blockers = [pMinZ + (pMaxZ - pMinZ) * 0.25, pMinZ + (pMaxZ - pMinZ) * 0.75, splitZ];
+      for (const bz of blockers) {
+        if (Math.abs(cornerZ - bz) < 1.8) cornerZ = bz + (cornerZ < bz ? -1.9 : 1.9);
+      }
+      cornerZ = Math.max(room.minZ + 0.7, Math.min(room.maxZ - 0.7, cornerZ));
       const roll = rng();
       const kind: LootKind = roll < 0.06 ? 'DOSSIER' : kinds[Math.floor(rng() * kinds.length)];
       loot.push({ id: `${id}-f${f}-l${k}`, buildingId: id, floor: f, x: cornerX, z: cornerZ, kind });
