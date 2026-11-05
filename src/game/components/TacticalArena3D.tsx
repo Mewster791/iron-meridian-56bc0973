@@ -823,6 +823,9 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           hud: { ...directorHud },
         }),
         building: (id: string) => cityLayout.byId.get(id),
+        killNear: (radius = 25) => {
+          for (const e of enemies) if (e.alive && e.rig.root.position.distanceTo(_playerPos) < radius) killEnemy(e);
+        },
       };
     }
 
