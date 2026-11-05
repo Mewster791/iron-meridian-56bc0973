@@ -2458,7 +2458,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       interactJustPressed = false;
 
       // Waypoint beam follows the current mission target
-      if (directorWaypoint) {
+      if (directorWaypoint && Math.hypot(directorWaypoint.x - _playerPos.x, directorWaypoint.z - _playerPos.z) > 14) {
         waypointBeam.visible = true;
         waypointBeam.position.set(directorWaypoint.x, directorWaypoint.y, directorWaypoint.z);
       } else {
