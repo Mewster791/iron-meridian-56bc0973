@@ -1487,6 +1487,8 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
 
       // A. Player Locomotion + Full 3D Solid Non-Phaseable Obstacle & Vehicle Collision
       const prevPlayerY = _playerPos.y;
+      const prevPlayerX = _playerPos.x;
+      const prevPlayerZ = _playerPos.z;
       const yaw = camControllerRef.current.yawRad;
       _forwardFlat.set(-Math.sin(yaw), 0, -Math.cos(yaw)).normalize();
       _rightFlat.set(Math.cos(yaw), 0, -Math.sin(yaw)).normalize();
@@ -1555,10 +1557,22 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       // Final static pass ensures a moving vehicle can never push the operator inside a wall or rock
       staticPhysics.resolveHorizontalBody(_playerPos, _playerPos.y, 1.75, 0.44);
 
-      const baseGroundY = Math.max(
-        RIVER_WATER_LEVEL - 0.55,
-        sampleWalkableHeight(_playerPos.x, _playerPos.z)
-      );
+      // Stairs: you can't walk through the low end of a staircase from underneath.
+      if (isBlockedByStairs(_playerPos.x, _playerPos.z, _playerPos.y)) {
+        if (!isBlockedByStairs(_playerPos.x, prevPlayerZ, _playerPos.y)) _playerPos.z = prevPlayerZ;
+        else if (!isBlockedByStairs(prevPlayerX, _playerPos.z, _playerPos.y)) _playerPos.x = prevPlayerX;
+        else {
+          _playerPos.x = prevPlayerX;
+          _playerPos.z = prevPlayerZ;
+        }
+      }
+
+      const baseGroundY = sampleCitySupport(_playerPos.x, _playerPos.z, prevPlayerY);
+      // Stick to stairs when walking down instead of floating off each step.
+      const dropToGround = prevPlayerY - baseGroundY;
+      if (playerGrounded && verticalVel <= 0 && dropToGround > 0 && dropToGround < 0.7) {
+        _playerPos.y = baseGroundY;
+      }
 
       if (!simPausedRef.current && keysDown['Space'] && playerGrounded) {
         verticalVel = 6.9;
@@ -1569,7 +1583,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       const vBounds = staticPhysics.resolveVerticalBounds(
         _playerPos.x,
         _playerPos.z,
-        prevPlayerY,
+        Math.max(prevPlayerY, baseGroundY),
         candidateY,
         1.75,
         0.4,
