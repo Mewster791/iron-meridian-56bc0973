@@ -1,25 +1,32 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   FactionId,
-  ObjectiveArchetype,
-  ObjectiveStatus,
   PlayerCombatState,
   RetrofitStage,
   RetrofitTechNode,
   SalvageInventory,
   SquadOrder,
   TacticalUnitVehicleState,
-  TheaterObjective,
 } from '../types/systems';
 import { canAdvanceRetrofitStage } from '../systems/scavengeRetrofitSystem';
 import { ATMOSPHERE_CONFIGS, AtmospherePreset } from '../three/proceduralTextures';
-import { TopographicalMapView } from './TopographicalMapCanvas';
+import { CityMapView } from './CityMapView';
+import { ACT_TITLES, LORE_DOSSIERS, MISSIONS } from '../campaign/campaignData';
 import {
+  CampaignProgress,
+  formatPlayTime,
+  getCurrentMission,
+  getStepBuilding,
+  getStepWaypoint,
+} from '../campaign/campaignRules';
+import {
+  BookOpen,
+  CheckCircle2,
+  Circle,
   Compass,
   Crosshair,
   Home,
   Keyboard,
-  MapPin,
   Shield,
   Sun,
   Target,
@@ -27,7 +34,7 @@ import {
   X,
 } from 'lucide-react';
 
-type PlayerMenuTab = 'MAP_AND_TARGET' | 'UPGRADES' | 'CONTROLS';
+type PlayerMenuTab = 'MAP_AND_MISSION' | 'JOURNAL' | 'UPGRADES' | 'CONTROLS';
 
 interface TacticalMenuOverlayProps {
   isOpen: boolean;
@@ -40,9 +47,7 @@ interface TacticalMenuOverlayProps {
   vehicleState: TacticalUnitVehicleState;
   techNodes: RetrofitTechNode[];
   salvageInventory: SalvageInventory;
-  activeObjectives: TheaterObjective[];
-  pinnedObjectiveUid: string | null;
-  onPinObjective: (uid: string) => void;
+  campaign: CampaignProgress;
   playerCoords: { x: number; z: number; yaw: number };
   vehicleCoords: { x: number; z: number };
   squadTargetCoords: { x: number; z: number } | null;
@@ -54,27 +59,10 @@ interface TacticalMenuOverlayProps {
 
 const SQUAD_ORDER_LABELS: Record<SquadOrder, string> = {
   [SquadOrder.FOLLOW_WEDGE]: 'Follow Operator',
-  [SquadOrder.HOLD_OVERWATCH]: 'Hold Overwatch',
+  [SquadOrder.HOLD_OVERWATCH]: 'Hold Position',
   [SquadOrder.ASSAULT_CONVOY]: 'Assault Convoy',
-  [SquadOrder.SUPPRESS_SECTOR]: 'Suppress Enemies',
+  [SquadOrder.SUPPRESS_SECTOR]: 'Move to Map Point',
 };
-
-function getDirectiveVerb(archetype: ObjectiveArchetype): string {
-  switch (archetype) {
-    case ObjectiveArchetype.CONVOY_AMBUSH:
-      return 'INTERCEPT & DESTROY';
-    case ObjectiveArchetype.SAM_BATTERY_RAID:
-      return 'RAID & ELIMINATE';
-    case ObjectiveArchetype.ARMOR_SPEARHEAD_HALT:
-      return 'DEFEAT ARMOR COLUMN';
-    case ObjectiveArchetype.BRIDGE_INTERDICTION:
-      return 'SECURE BRIDGEHEAD';
-    case ObjectiveArchetype.COMMS_BUNKER_BREACH:
-      return 'BREACH & CLEAR';
-    default:
-      return 'EXECUTE & CAPTURE';
-  }
-}
 
 export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
   isOpen,
@@ -87,9 +75,7 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
   vehicleState,
   techNodes,
   salvageInventory,
-  activeObjectives,
-  pinnedObjectiveUid,
-  onPinObjective,
+  campaign,
   playerCoords,
   vehicleCoords,
   squadTargetCoords,
@@ -98,25 +84,15 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
   onAdvanceTechNode,
   onSetSquadOrder,
 }) => {
-  const [subTab, setSubTab] = useState<PlayerMenuTab>('MAP_AND_TARGET');
-
-  const activeTarget = useMemo(() => {
-    if (pinnedObjectiveUid) {
-      const pinned = activeObjectives.find((o) => o.uid === pinnedObjectiveUid);
-      if (pinned) return pinned;
-    }
-    return (
-      activeObjectives.find((o) => o.status !== ObjectiveStatus.COMPLETED) ??
-      activeObjectives[0] ??
-      null
-    );
-  }, [activeObjectives, pinnedObjectiveUid]);
+  const [subTab, setSubTab] = useState<PlayerMenuTab>('MAP_AND_MISSION');
 
   if (!isOpen) return null;
 
-  const completedCount = activeObjectives.filter(
-    (o) => o.status === ObjectiveStatus.COMPLETED
-  ).length;
+  const mission = getCurrentMission(campaign);
+  const step = mission ? mission.steps[campaign.stepIndex] : null;
+  const waypoint = getStepWaypoint(step);
+  const targetBuilding = getStepBuilding(step);
+  const waypointDist = waypoint ? Math.round(Math.hypot(waypoint.x - playerCoords.x, waypoint.z - playerCoords.z)) : 0;
 
   const readyUpgradeCount = techNodes.filter(
     (n) =>
@@ -124,16 +100,17 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
       canAdvanceRetrofitStage(n, techNodes, salvageInventory).allowed
   ).length;
 
-  const targetDistanceMeters = activeTarget
-    ? Math.round(
-        Math.hypot(activeTarget.worldX - playerCoords.x, activeTarget.worldZ - playerCoords.z)
-      )
-    : 0;
-
   const eraCount =
     faction === FactionId.EAST
       ? salvageInventory.westernCompositePlates
       : salvageInventory.easternEraBlocks;
+
+  const tabs: Array<{ id: PlayerMenuTab; label: string }> = [
+    { id: 'MAP_AND_MISSION', label: `Map & Mission (${campaign.completedMissionIds.length}/${MISSIONS.length})` },
+    { id: 'JOURNAL', label: `Journal (${campaign.dossiersFound.length}/${LORE_DOSSIERS.length} dossiers)` },
+    { id: 'UPGRADES', label: `Upgrades${readyUpgradeCount > 0 ? ` (${readyUpgradeCount} Ready)` : ''}` },
+    { id: 'CONTROLS', label: 'Controls' },
+  ];
 
   return (
     <div className="fixed inset-0 z-50 bg-[#070A0F]/95 flex flex-col text-[#E6ECF2] select-none">
@@ -141,43 +118,22 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
       <div className="h-14 px-6 border-b border-slate-800 bg-[#0D1219] flex items-center justify-between gap-4 shrink-0">
         <div className="flex items-center gap-5 overflow-x-auto">
           <span className="font-display text-xl font-bold tracking-wide text-white uppercase whitespace-nowrap">
-            Tactical Map &amp; Orders
+            Varos-Meridian
           </span>
 
           <div className="flex items-center gap-1 p-1 bg-[#090D12] border border-slate-800 rounded-lg">
-            <button
-              type="button"
-              onClick={() => setSubTab('MAP_AND_TARGET')}
-              className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                subTab === 'MAP_AND_TARGET'
-                  ? 'bg-[#F59E0B] text-slate-950 font-semibold'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              Map &amp; Active Target ({completedCount}/{activeObjectives.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setSubTab('UPGRADES')}
-              className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                subTab === 'UPGRADES'
-                  ? 'bg-[#F59E0B] text-slate-950 font-semibold'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              Upgrades{readyUpgradeCount > 0 ? ` (${readyUpgradeCount} Ready)` : ''}
-            </button>
-            <button
-              type="button"
-              onClick={() => setSubTab('CONTROLS')}
-              className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                subTab === 'CONTROLS'
-                  ? 'bg-[#F59E0B] text-slate-950 font-semibold'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              Controls
-            </button>
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setSubTab(t.id)}
+                className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  subTab === t.id ? 'bg-[#F59E0B] text-slate-950 font-semibold' : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -204,103 +160,91 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
 
       {/* Menu Body */}
       <div className="flex-1 overflow-y-auto p-5 md:p-6">
-        {subTab === 'MAP_AND_TARGET' && (
+        {subTab === 'MAP_AND_MISSION' && (
           <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-            {/* Left 7 Columns: Bigger Topographical Sector Map */}
             <div className="lg:col-span-7 bg-[#11161F] border border-slate-800 rounded-xl p-4 flex flex-col space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <div className="font-semibold text-white flex items-center gap-2">
-                  <Compass className="w-4 h-4 text-[#F59E0B]" />
-                  <span>Regional Operations Map (Click any pin to set target · Click terrain to move APC)</span>
-                </div>
+              <div className="font-semibold text-white flex items-center gap-2 text-xs">
+                <Compass className="w-4 h-4 text-[#F59E0B]" />
+                <span>City map · click anywhere to send the squad APC there</span>
               </div>
-
               <div className="aspect-square w-full max-h-[64vh] mx-auto rounded-lg overflow-hidden border border-slate-700/80 bg-[#0B0E13] cursor-crosshair">
-                <TopographicalMapView
-                  objectives={activeObjectives}
-                  selectedObjectiveUid={activeTarget?.uid ?? null}
-                  pinnedObjectiveUid={activeTarget?.uid ?? null}
+                <CityMapView
                   playerCoords={playerCoords}
                   vehicleCoords={vehicleCoords}
                   squadTargetCoords={squadTargetCoords}
                   convoyCoords={convoyCoords}
-                  onSelectObjective={(obj) => onPinObjective(obj.uid)}
+                  waypoint={waypoint ? { x: waypoint.x, z: waypoint.z } : null}
+                  targetBuildingId={targetBuilding?.id ?? null}
+                  destroyedBuildingIds={campaign.destroyedBuildingIds}
                   onClickMapWorldPoint={(wx, wz) => onIssueSquadMoveOrder(wx, wz)}
                 />
               </div>
-
               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-400">
-                <span>Cyan Arrow: You · Green Square: Squad APC · Red Diamond: Enemy Convoy</span>
-                <span>Sky-Blue Pin: Current Target Order</span>
+                <span>Blue arrow: you · Green: squad APC · Red diamond: convoy</span>
+                <span>Amber: mission building · Green building: safehouse</span>
               </div>
             </div>
 
-            {/* Right 5 Columns: Active Order / Target to Defeat & Execute */}
-            <div className="lg:col-span-5 flex flex-col justify-between space-y-4">
-              {/* Primary Order / Target Card */}
-              {activeTarget && (
+            <div className="lg:col-span-5 flex flex-col space-y-4">
+              {mission ? (
                 <div className="bg-[#11161F] border-2 border-[#F59E0B]/80 rounded-xl p-5 space-y-3.5">
                   <div className="flex items-center justify-between text-xs font-mono">
                     <span className="text-[#F59E0B] font-semibold flex items-center gap-1.5">
                       <Target className="w-4 h-4" />
-                      ACTIVE ORDER · {getDirectiveVerb(activeTarget.archetype)}
+                      {ACT_TITLES[mission.act].title.toUpperCase()} · MISSION {mission.number}
                     </span>
-                    <span className="text-sky-300 tabular-nums">{targetDistanceMeters}m away</span>
+                    {waypoint && <span className="text-sky-300 tabular-nums">{waypointDist}m away</span>}
                   </div>
-
                   <div>
-                    <h2 className="text-xl font-bold text-white leading-snug">
-                      {activeTarget.title}
-                    </h2>
-                    <div className="text-xs font-mono text-slate-400 mt-1 tabular-nums">
-                      Sector: {activeTarget.biome.replace('_', ' ')} · Threat Level {activeTarget.threatTier}
-                    </div>
+                    <h2 className="text-xl font-bold text-white leading-snug">{mission.title}</h2>
+                    <div className="text-xs font-mono text-slate-400 mt-1">{mission.location}</div>
                   </div>
-
-                  <div className="p-3 rounded-lg bg-[#0B0E13] border border-slate-800 space-y-1 text-xs">
-                    <div className="text-slate-200 font-medium">
-                      Mission Execution &amp; Upgrade Reward:
-                    </div>
-                    <div className="text-slate-400">
-                      Move into target perimeter and neutralize hostile defenders, or intercept the
-                      enemy armored convoy along the northern highway to capture upgrade crates.
-                    </div>
-                    <div className="text-[#F59E0B] font-mono pt-1 tabular-nums">
-                      Reward: +{activeTarget.rewardScrap} Alloy · +{activeTarget.rewardArmorUnits}{' '}
-                      Armor Plates · +{activeTarget.rewardChips} Tech Chips
-                    </div>
+                  <div className="space-y-2 text-xs text-slate-300 leading-relaxed">
+                    {mission.briefing.map((line) => (
+                      <p key={line}>{line}</p>
+                    ))}
                   </div>
-
-                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <ol className="space-y-1.5 text-xs">
+                    {mission.steps.map((s, i) => {
+                      const done = i < campaign.stepIndex;
+                      const current = i === campaign.stepIndex;
+                      return (
+                        <li
+                          key={`${s.type}-${i}`}
+                          className={`flex items-start gap-2 ${done ? 'text-emerald-400' : current ? 'text-white font-semibold' : 'text-slate-500'}`}
+                        >
+                          {done ? <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" /> : <Circle className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+                          <span>{s.text}</span>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                  <div className="text-[#F59E0B] font-mono text-xs tabular-nums pt-1 border-t border-slate-800">
+                    Reward: +{mission.reward.scrap} alloy · +{mission.reward.plates} plates · +{mission.reward.chips} chips
+                  </div>
+                  {waypoint && (
                     <button
                       type="button"
-                      onClick={() =>
-                        onIssueSquadMoveOrder(activeTarget.worldX, activeTarget.worldZ)
-                      }
+                      onClick={() => onIssueSquadMoveOrder(waypoint.x, waypoint.z)}
                       className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
                       <Crosshair className="w-3.5 h-3.5" />
-                      <span>Order Squad APC to Target</span>
+                      <span>Send squad APC to the objective</span>
                     </button>
-
-                    <button
-                      type="button"
-                      onClick={onClose}
-                      className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <MapPin className="w-3.5 h-3.5 text-sky-400" />
-                      <span>Track on 3D HUD</span>
-                    </button>
-                  </div>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-[#11161F] border-2 border-emerald-500/70 rounded-xl p-5 space-y-2">
+                  <h2 className="text-xl font-bold text-white">Campaign complete</h2>
+                  <p className="text-xs text-slate-300">Varos-Meridian is free. You can keep exploring, looting and upgrading.</p>
                 </div>
               )}
 
-              {/* Squad Standing Orders */}
               <div className="bg-[#11161F] border border-slate-800 rounded-xl p-4 space-y-2.5">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-white">Squad Standing Order [Key F]</span>
+                  <span className="font-semibold text-white">Squad order [F]</span>
                   <span className="font-mono text-slate-400 tabular-nums">
-                    APC Armor {vehicleState.armorPlatingHp}/{vehicleState.maxArmorPlatingHp}
+                    APC armor {vehicleState.armorPlatingHp}/{vehicleState.maxArmorPlatingHp}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -321,52 +265,62 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
                 </div>
               </div>
 
-              {/* Other Targets to Execute in Sector */}
-              <div className="bg-[#11161F] border border-slate-800 rounded-xl p-4 flex-1 flex flex-col space-y-2.5 min-h-[200px] max-h-[260px]">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-white">Select Target to Execute</span>
-                  <span className="font-mono text-slate-400 tabular-nums">
-                    {completedCount}/{activeObjectives.length} Cleared
-                  </span>
+              <div className="bg-[#11161F] border border-slate-800 rounded-xl p-4 grid grid-cols-3 gap-3 text-xs font-mono tabular-nums">
+                <div>
+                  <div className="text-slate-400">Time played</div>
+                  <div className="text-white font-semibold mt-0.5">{formatPlayTime(campaign.playTimeSec)}</div>
                 </div>
+                <div>
+                  <div className="text-slate-400">Times down</div>
+                  <div className="text-white font-semibold mt-0.5">{campaign.deaths}</div>
+                </div>
+                <div>
+                  <div className="text-slate-400">Crates searched</div>
+                  <div className="text-white font-semibold mt-0.5">{campaign.lootedIds.length}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-                <div className="overflow-y-auto space-y-1 pr-1 text-xs font-mono tabular-nums">
-                  {activeObjectives.map((obj) => {
-                    const isPinned = activeTarget?.uid === obj.uid;
-                    const isDone = obj.status === ObjectiveStatus.COMPLETED;
-                    const dist = Math.round(
-                      Math.hypot(obj.worldX - playerCoords.x, obj.worldZ - playerCoords.z)
-                    );
+        {subTab === 'JOURNAL' && (
+          <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-[#11161F] border border-slate-800 rounded-xl p-5 space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                <BookOpen className="w-4 h-4 text-[#F59E0B]" />
+                <span>Campaign log</span>
+              </div>
+              {([1, 2, 3] as const).map((act) => (
+                <div key={act} className="space-y-1.5">
+                  <div className="text-xs font-mono text-[#F59E0B]">{ACT_TITLES[act].title}</div>
+                  {MISSIONS.filter((m) => m.act === act).map((m) => {
+                    const done = campaign.completedMissionIds.includes(m.id);
+                    const current = mission?.id === m.id;
                     return (
-                      <button
-                        key={obj.uid}
-                        type="button"
-                        onClick={() => onPinObjective(obj.uid)}
-                        className={`w-full text-left px-3 py-2 rounded-md flex items-center justify-between gap-2 transition-colors cursor-pointer ${
-                          isPinned
-                            ? 'bg-sky-500/20 border border-sky-400/60 text-white'
-                            : 'bg-[#0B0E13] text-slate-300 hover:bg-slate-800/70'
-                        }`}
-                      >
-                        <span className="truncate">
-                          {String(obj.runOrderIndex).padStart(2, '0')}. {obj.title}
-                        </span>
-                        <span
-                          className={
-                            isDone
-                              ? 'text-emerald-400 shrink-0'
-                              : isPinned
-                                ? 'text-sky-300 shrink-0'
-                                : 'text-slate-400 shrink-0'
-                          }
-                        >
-                          {isDone ? 'CLEARED' : isPinned ? `TARGET (${dist}m)` : `${dist}m`}
-                        </span>
-                      </button>
+                      <div key={m.id} className={`text-xs ${done ? 'text-slate-300' : current ? 'text-white font-semibold' : 'text-slate-600'}`}>
+                        <div>
+                          {m.number}. {done || current ? m.title : '???'}
+                          {current && <span className="text-[#F59E0B] font-mono"> · in progress</span>}
+                        </div>
+                        {done && <div className="text-[11px] text-slate-500 leading-relaxed">{m.outro}</div>}
+                      </div>
                     );
                   })}
                 </div>
-              </div>
+              ))}
+            </div>
+            <div className="bg-[#11161F] border border-slate-800 rounded-xl p-5 space-y-3">
+              <div className="text-sm font-semibold text-white">Dossiers found in the city</div>
+              <p className="text-[11px] text-slate-400">Gold document cases are hidden in buildings across Varos-Meridian.</p>
+              {LORE_DOSSIERS.map((doc) => {
+                const found = campaign.dossiersFound.includes(doc.id);
+                return (
+                  <div key={doc.id} className="p-3 rounded-lg bg-[#0B0E13] border border-slate-800">
+                    <div className={`text-xs font-semibold ${found ? 'text-white' : 'text-slate-600'}`}>{found ? doc.title : 'Undiscovered dossier'}</div>
+                    {found && <div className="text-[11px] text-slate-400 mt-1 leading-relaxed">{doc.text}</div>}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -430,7 +384,7 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
                           {installed
                             ? 'EQUIPPED'
                             : node.stage === RetrofitStage.LOCKED_UNSEEN
-                              ? 'LOOT CONVOY TO UNLOCK'
+                              ? 'LOOT CONVOYS TO UNLOCK'
                               : 'IN PROGRESS'}
                         </span>
                       </div>
@@ -534,11 +488,15 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
                   <span className="text-[#F59E0B]">4 ({playerState.medkitsRemaining} left)</span>
                 </div>
                 <div className="flex justify-between px-3.5 py-2.5 rounded-lg bg-[#0B0E13] border border-slate-800">
-                  <span className="text-slate-300 font-sans">Loot Crate / Resupply &amp; Upgrade at APC</span>
+                  <span className="text-slate-300 font-sans">Search crates · rest · APC (hold to plant / download)</span>
                   <span className="text-[#F59E0B]">E</span>
                 </div>
                 <div className="flex justify-between px-3.5 py-2.5 rounded-lg bg-[#0B0E13] border border-slate-800">
-                  <span className="text-slate-300 font-sans">Open Map &amp; Target Order</span>
+                  <span className="text-slate-300 font-sans">Detonate a planted charge</span>
+                  <span className="text-[#F59E0B]">G</span>
+                </div>
+                <div className="flex justify-between px-3.5 py-2.5 rounded-lg bg-[#0B0E13] border border-slate-800">
+                  <span className="text-slate-300 font-sans">Open map, mission &amp; journal</span>
                   <span className="text-[#F59E0B]">M</span>
                 </div>
               </div>
