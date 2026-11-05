@@ -6,7 +6,6 @@ import {
   FactionId,
   FirearmState,
   HealthStatus,
-  ObjectiveStatus,
   PerspectiveMode,
   PlayerCombatState,
   RetrofitStage,
@@ -16,7 +15,6 @@ import {
   SquadOrder,
   SwordState,
   TacticalUnitVehicleState,
-  TheaterObjective,
   WeaponSlot,
 } from '../types/systems';
 import {
@@ -32,15 +30,42 @@ import {
   stepPlayerCombatStateMachine,
 } from '../systems/loadoutHealthSystem';
 import {
-  BRIDGE_X_COORDS,
-  getCrossValleyRoadX,
-  getHighwayCenterZ,
-  getRiverCenterZ,
-  RIVER_WATER_LEVEL,
-  sampleWalkableHeight,
-  THEATER_HALF_EXTENT,
-  THEATER_LANDMARKS,
-} from '../systems/theaterMapGenerator';
+  AVENUE_Z,
+  Building,
+  BLOCKS_PER_SIDE,
+  blockCenter,
+  findBuildingAt,
+  floorY,
+  getBuildingEntrance,
+  getCityLayout,
+  getFloorAt,
+  getFloorPosts,
+  isBlockedByStairs,
+  PLAYABLE_HALF_EXTENT,
+  Rect,
+  sampleCitySupport,
+} from '../city/cityLayout';
+import { buildCityScene } from '../city/cityBuilder';
+import { MISSIONS, MissionStep } from '../campaign/campaignData';
+import {
+  CampaignProgress,
+  canDetonate,
+  canResupplyAtApc,
+  canStartHoldAction,
+  ENEMY_DAMAGE_BY_ACT,
+  ENEMY_HP_BY_ACT,
+  getActionSpot,
+  getCurrentMission,
+  getCurrentStep,
+  getStepBuilding,
+  getStepWaypoint,
+  isFloorCleared,
+  LootReward,
+  rollLootReward,
+  stepDefendTimer,
+  stepHoldProgress,
+  APC_RESUPPLY_COOLDOWN_SEC,
+} from '../campaign/campaignRules';
 import {
   resolveDynamicBoxCollision,
   StaticWorldPhysics,
@@ -48,16 +73,12 @@ import {
 import {
   buildConvoySupplyTruck,
   buildFirstPersonViewmodel,
-  buildLandmarkComplex,
-  buildMultiBiomeTerrainMesh,
   buildOperatorModel,
-  buildRiverBridge,
   buildSalvageTechCrate,
   buildSquadCommandVehicle,
   CommandVehicleRefs,
   FirstPersonViewmodelRefs,
   OperatorRigRefs,
-  registerLandmarkAndBridgeColliders,
 } from '../three/proceduralModels';
 import {
   ATMOSPHERE_CONFIGS,
@@ -66,9 +87,10 @@ import {
   createProceduralSkyDome,
 } from '../three/proceduralTextures';
 import { canAdvanceRetrofitStage } from '../systems/scavengeRetrofitSystem';
-import { TopographicalMapView } from './TopographicalMapCanvas';
+import { CityMapView } from './CityMapView';
 import { audioEngine } from '../systems/audioEngine';
 import {
+  Building2,
   ChevronDown,
   ChevronUp,
   HeartPulse,
@@ -80,6 +102,20 @@ import {
   VolumeX,
   Wrench,
 } from 'lucide-react';
+
+/** The city streets are flat; floors and stairs come from sampleCitySupport. */
+const sampleWalkableHeight = (_x: number, _z: number): number => 0;
+const CONVOY_LANE_Z = AVENUE_Z + 2.6;
+const getHighwayCenterZ = (_x: number): number => CONVOY_LANE_Z;
+const THEATER_HALF_EXTENT = PLAYABLE_HALF_EXTENT + 10;
+
+export interface MissionHudState {
+  missionLabel: string;
+  stepText: string;
+  detail: string;
+  progress: number | null;
+  locationLabel: string;
+}
 
 interface TacticalArena3DProps {
   isRoundActive: boolean;
@@ -93,20 +129,33 @@ interface TacticalArena3DProps {
   setVehicleState: React.Dispatch<React.SetStateAction<TacticalUnitVehicleState>>;
   techNodes: RetrofitTechNode[];
   salvageInventory: SalvageInventory;
-  activeObjectives: TheaterObjective[];
-  pinnedObjectiveUid: string | null;
+  campaign: CampaignProgress;
   squadTargetCoords: { x: number; z: number } | null;
-  deployRequest: { x: number; z: number; nonce: number } | null;
+  deployRequest: { x: number; z: number; y: number; nonce: number } | null;
   onSyncLiveCoords: (
-    player: { x: number; z: number; yaw: number },
+    player: { x: number; z: number; y: number; yaw: number },
     vehicle: { x: number; z: number },
     convoy: { x: number; z: number; intact: boolean }
   ) => void;
   onLootConvoyCrate: () => void;
-  onQuickRetrofitNextNode: () => void;
+  onQuickRetrofitNextNode: (resupplied: boolean) => void;
+  onStepComplete: () => void;
+  onFloorCleared: (floor: number) => void;
+  onLoot: (lootId: string, reward: LootReward) => void;
+  onBuildingDestroyed: (buildingId: string) => void;
+  onPlayerDown: () => void;
+  onToast: (msg: string) => void;
 }
 
+type EnemyKind = 'STREET' | 'FLOOR' | 'GUARD' | 'HVT' | 'WAVE';
+
 interface EnemyActor {
+  kind: EnemyKind;
+  floorY: number;
+  bounds: Rect | null;
+  floor: number;
+  damage: number;
+  chase: boolean;
   id: string;
   rig: OperatorRigRefs;
   hp: number;
