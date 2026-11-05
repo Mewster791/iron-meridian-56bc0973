@@ -329,10 +329,18 @@ export function buildCityScene(
     shellMesh.castShadow = opts.castShadows;
     disposables.push(shellMesh.geometry);
 
+    // LOD distance is measured from the LOD's own position, so centre it on the building
+    // and shift the (world-space) geometry back by the same amount.
+    const bcx = (fp.minX + fp.maxX) / 2;
+    const bcz = (fp.minZ + fp.maxZ) / 2;
+    detailMesh.geometry.translate(-bcx, 0, -bcz);
+    shellMesh.geometry.translate(-bcx, 0, -bcz);
+    detailMesh.geometry.computeBoundingSphere();
+    shellMesh.geometry.computeBoundingSphere();
     const lod = new THREE.LOD();
     lod.addLevel(detailMesh, 0);
     lod.addLevel(shellMesh, 85);
-    lod.position.set(0, 0, 0);
+    lod.position.set(bcx, 0, bcz);
     root.add(lod);
     buildingObjects.set(b.id, lod);
   }
