@@ -381,7 +381,7 @@ class IronBowEngine {
           const len = n.dur * x;
           const vel = Math.min(1, n.velocity);
           this.bowed(t, chord.root, len, vel, 'contrabass', 'marcato');
-          this.bowed(t, chord.root - 12 >= 26 ? chord.root - 12 : chord.root + 12, len, vel * 0.6, 'contrabass', 'marcato');
+          this.bowed(t, chord.root + 12, len, vel * 0.6, 'contrabass', 'marcato');
           for (const m of chordTones(chord, 45, 3)) this.bowed(t, m, len, vel * 0.7, 'cello', 'marcato');
         }
         return;
