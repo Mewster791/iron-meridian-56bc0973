@@ -11,4 +11,4 @@
 - [x] Tests for mission rules
 - [x] Fix mission 5 (Iron Road) convoy kill not registering
 - [x] Hidden tester panel: Control, 94206722, password "color" = blue
-- [x] Adaptive 4-phase soundtrack (ambient / assault / combat / resolution) anchored to the theme lyrics
+- [x] Single unified soundtrack "Iron Bow, Broken Crown" (contrabass, cello, violin), same everywhere

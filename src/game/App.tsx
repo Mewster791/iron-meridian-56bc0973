@@ -234,7 +234,7 @@ export default function App() {
   const showBriefing = isRoundActive && (debrief !== null || (!campaign.briefingSeen && getCurrentMission(campaign) !== null));
   const simPaused = isMenuOpen || showBriefing || testerStage !== 'closed';
 
-  // ---- adaptive score: Phase 1 on home / map / briefings, Phase 4 on the mission debrief ----
+  // ---- soundtrack: one song ("Iron Bow, Broken Crown") plays the same everywhere, start to finish ----
   const [musicMuted, setMusicMuted] = useState(false);
   useEffect(() => {
     setMusicMuted(musicEngine.isMuted());
@@ -247,12 +247,6 @@ export default function App() {
       window.removeEventListener('keydown', unlock);
     };
   }, []);
-  useEffect(() => {
-    if (!isRoundActive) musicEngine.setContext('HOME');
-    else if (debrief !== null) musicEngine.setContext('VICTORY');
-    else if (simPaused) musicEngine.setContext('MAP');
-    else musicEngine.setContext('PLAYING');
-  }, [isRoundActive, debrief, simPaused]);
   const toggleMusic = () => {
     const next = !musicEngine.isMuted();
     musicEngine.setMuted(next);

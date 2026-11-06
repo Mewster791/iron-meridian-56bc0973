@@ -1,162 +1,110 @@
 /**
- * "Iron Meridian" — adaptive dystopian cyber-industrial orchestral score.
+ * Plays "Iron Bow, Broken Crown" — the single Iron Meridian soundtrack.
  *
- * Fully procedural (Web Audio), 90 BPM march in D minor. Four phases cross-fade
- * as the music director (musicDirector.ts) reports tension changes:
+ * Fully procedural Web Audio (no audio files): a contrabass, a cello and a
+ * violin section synthesised from bowed-string voices in a cold concert hall.
+ * The score itself (melody, chords, tempo, dynamics, accompaniment figures)
+ * lives in ironBowScore.ts; this engine only performs it.
  *
- *   Phase 1  AMBIENT     ambient synth hums + distant metallic taps
- *            "Shadows stretch across the iron wire / Beneath the grid, a quiet, growing fire."
- *   Phase 2  ASSAULT     heavy industrial drums + distorted rolling bassline
- *            "Brick by brick, we break the monolith / Take the streets they built the empire with."
- *   Phase 3  COMBAT      piercing strings, booming lows, 16th-note drivers
- *            "Stand your ground against the steel brigade! / Reclaim the districts where the ghosts were made!"
- *   Phase 4  RESOLUTION  instruments drop out, cold echoing reverb tail
- *            "The sector falls silent. The iron belongs to us now."
- *
- * The track is instrumental, but every lead rhythm is a lyric line set to the
- * 16th-note grid: each syllable is a note, stressed syllables (UPPER CASE) are
- * accented and land on chord tones, so the phrases "speak" the words.
+ * The song is the same everywhere — home screen, map, missions, debriefs. It
+ * never reacts to enemies, gunfire or menus: it plays from the intro to the
+ * final chord, rests for the tail, then starts again from the top.
  */
 
 import {
-  MUSIC_BPM,
-  NEAR_ENEMY_RANGE,
-  createMusicDirectorState,
-  nextMusicPhase,
-  type MusicContext,
-  type MusicDirectorState,
-  type MusicPhase,
-  type ThreatSnapshot,
-} from './musicDirector';
+  IRON_BOW,
+  chordTones,
+  locate,
+  type Articulation,
+  type Chord,
+  type Part,
+  type ScoreNote,
+  type SectionId,
+  type Voice,
+} from './ironBowScore';
 
-// ---------------------------------------------------------------------------
-// Composition data
-// ---------------------------------------------------------------------------
-
-interface Syllable {
-  text: string;
-  /** Position on a 32-step (two bar) 16th-note grid. */
-  slot: number;
-  stressed: boolean;
-  /** Melodic contour: index into the current chord's tones (0 = root, 3 = root an octave up). */
-  tone: number;
-}
-
-/** Build a motif from "SHA-dows STRETCH ..." text and matching slot / tone arrays. */
-const motif = (line: string, slots: number[], tones: number[]): Syllable[] => {
-  const syl = line.replace(/[!.,]/g, '').split(/[\s-]+/).filter(Boolean);
-  return syl.map((text, i) => ({
-    text,
-    slot: slots[i],
-    stressed: text === text.toUpperCase() && /[A-Z]/.test(text),
-    tone: tones[i] ?? 0,
-  }));
-};
-
-const SIXTEENTH = 60 / MUSIC_BPM / 4;
-
-// Phase 1 — distant metal taps, spread wide and slow.
-const LYRIC_SHADOWS = motif(
-  'SHA-dows STRETCH a-CROSS the I-ron WIRE',
-  [0, 3, 6, 10, 12, 15, 18, 21, 24],
-  [4, 2, 5, 2, 4, 1, 3, 2, 5]
-);
-const LYRIC_GRID = motif(
-  'be-NEATH the GRID a QUI-et GROW-ing FIRE',
-  [0, 2, 5, 8, 12, 14, 17, 20, 23, 26],
-  [1, 3, 1, 4, 2, 4, 2, 5, 3, 6]
-);
-// Phase 2 — the bassline hook.
-const LYRIC_BRICK = motif(
-  'BRICK by BRICK we BREAK the MON-o-lith TAKE the STREETS they BUILT the EM-pire WITH',
-  [0, 2, 4, 7, 8, 10, 12, 13, 14, 16, 18, 20, 23, 24, 26, 28, 29, 30],
-  [0, 3, 0, 2, 0, 3, 1, 0, 3, 0, 3, 0, 2, 1, 3, 2, 1, 0]
-);
-// Phase 3 — the string lead.
-const LYRIC_STAND = motif(
-  'STAND your GROUND a-GAINST the STEEL bri-GADE re-CLAIM the DIS-tricts WHERE the GHOSTS were MADE',
-  [0, 3, 4, 6, 7, 9, 10, 12, 13, 16, 17, 19, 20, 22, 24, 25, 26, 28, 29],
-  [3, 2, 3, 4, 4, 3, 5, 4, 5, 2, 3, 2, 4, 3, 4, 3, 5, 4, 3]
-);
-// Phase 4 — final stabs, on an 8th-note grid (half speed), then silence.
-const LYRIC_SECTOR = motif(
-  'the SEC-tor FALLS SI-lent the I-ron be-LONGS to US NOW',
-  [0, 1, 2, 4, 6, 7, 12, 13, 14, 16, 17, 19, 20, 22],
-  [0, 4, 3, 2, 1, 0, 0, 3, 2, 1, 2, 1, 0, 0]
-);
-
-interface Chord {
-  /** Bass root, MIDI. */
-  root: number;
-  intervals: [number, number, number];
-}
-/** i – VI – iv – V in D minor (harmonic minor dominant for the cold pull home). Two bars each. */
-const PROGRESSION: Chord[] = [
-  { root: 38, intervals: [0, 3, 7] }, // Dm
-  { root: 34, intervals: [0, 4, 7] }, // Bb
-  { root: 31, intervals: [0, 3, 7] }, // Gm
-  { root: 33, intervals: [0, 4, 7] }, // A
-];
-
-const chordTone = (chord: Chord, index: number, octaveOffset: number): number => {
-  const oct = Math.floor(index / 3);
-  return chord.root + octaveOffset + chord.intervals[((index % 3) + 3) % 3] + oct * 12;
-};
+const MASTER_LEVEL = 0.4;
+const MUTE_KEY = 'iron-meridian:music-muted';
+const LOOKAHEAD_SEC = 0.15;
 
 const midiHz = (m: number): number => 440 * Math.pow(2, (m - 69) / 12);
 
-type LayerName = 'pad' | 'taps' | 'drums' | 'bass' | 'strings' | 'outro';
-
-const LAYER_SEND: Record<LayerName, number> = {
-  pad: 0.35,
-  taps: 0.9,
-  drums: 0.16,
-  bass: 0.06,
-  strings: 0.32,
-  outro: 1,
-};
-
-const PHASE_MIX: Record<MusicPhase, Record<LayerName, number>> = {
-  AMBIENT: { pad: 0.6, taps: 0.75, drums: 0, bass: 0, strings: 0, outro: 0 },
-  ASSAULT: { pad: 0.38, taps: 0.35, drums: 0.85, bass: 0.7, strings: 0, outro: 0 },
-  COMBAT: { pad: 0.3, taps: 0.2, drums: 1, bass: 0.85, strings: 0.72, outro: 0 },
-  RESOLUTION: { pad: 0, taps: 0, drums: 0, bass: 0, strings: 0, outro: 1 },
-};
-
-const MASTER_LEVEL = 0.34;
-const MUTE_KEY = 'iron-meridian:music-muted';
-
-// ---------------------------------------------------------------------------
-// Engine
-// ---------------------------------------------------------------------------
-
-interface Layer {
-  gain: GainNode;
-  send: GainNode;
+interface VoiceSpec {
+  /** Detune (cents) of each sawtooth in the section. */
+  detunes: number[];
+  highpass: number;
+  lowpass: number;
+  /** Body resonance. */
+  bodyHz: number;
+  bodyGain: number;
+  vibratoHz: number;
+  vibratoCents: number;
+  level: number;
+  pan: number;
+  reverbSend: number;
 }
 
-class AdaptiveScoreEngine {
+/** Orchestral seating: violins left, cello centre-right, contrabass right. */
+const VOICES: Record<Voice, VoiceSpec> = {
+  contrabass: {
+    detunes: [-7, 6],
+    highpass: 28,
+    lowpass: 900,
+    bodyHz: 110,
+    bodyGain: 6,
+    vibratoHz: 4.6,
+    vibratoCents: 6,
+    level: 0.2,
+    pan: 0.35,
+    reverbSend: 0.22,
+  },
+  cello: {
+    detunes: [-9, 0, 8],
+    highpass: 60,
+    lowpass: 2600,
+    bodyHz: 260,
+    bodyGain: 5,
+    vibratoHz: 5.2,
+    vibratoCents: 11,
+    level: 0.13,
+    pan: 0.15,
+    reverbSend: 0.34,
+  },
+  violin: {
+    detunes: [-12, -3, 5, 13],
+    highpass: 220,
+    lowpass: 6400,
+    bodyHz: 2900,
+    bodyGain: 6,
+    vibratoHz: 5.8,
+    vibratoCents: 13,
+    level: 0.085,
+    pan: -0.35,
+    reverbSend: 0.42,
+  },
+};
+
+export interface MusicStatus {
+  title: string;
+  playing: boolean;
+  muted: boolean;
+  section: SectionId;
+  bar: number;
+  bpm: number;
+}
+
+class IronBowEngine {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
-  private reverbReturn!: GainNode;
   private reverb!: ConvolverNode;
-  private layers!: Record<LayerName, Layer>;
+  private buses!: Record<Voice, GainNode>;
   private noise!: AudioBuffer;
-  private distCurve!: Float32Array<ArrayBuffer>;
-  private padFilter!: BiquadFilterNode;
-  private padVoices: OscillatorNode[][] = [];
-  private hum!: OscillatorNode;
 
   private muted = false;
   private started = false;
   private timer: number | null = null;
   private nextTime = 0;
   private step = 0;
-
-  private context: MusicContext = 'HOME';
-  private threat: ThreatSnapshot = { nearEnemies: 0, engagedEnemies: 0, objectiveDist: null };
-  private lastCombatEventAt = -Infinity;
-  private director: MusicDirectorState = createMusicDirectorState();
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -186,8 +134,7 @@ class AdaptiveScoreEngine {
       this.started = true;
       const now = this.ctx.currentTime;
       this.master.gain.setValueAtTime(0, now);
-      this.master.gain.linearRampToValueAtTime(MASTER_LEVEL, now + 3);
-      this.applyMix(this.director.phase, 0.5);
+      this.master.gain.linearRampToValueAtTime(MASTER_LEVEL, now + 1.5);
       this.nextTime = now + 0.1;
       this.step = 0;
       this.timer = window.setInterval(this.tick, 25);
@@ -225,27 +172,17 @@ class AdaptiveScoreEngine {
     return this.muted;
   }
 
-  public setContext(context: MusicContext): void {
-    this.context = context;
-    this.updateDirector();
-  }
-
-  /** Called every frame by the 3D arena. */
-  public reportThreat(threat: ThreatSnapshot): void {
-    this.threat = threat;
-  }
-
-  /** Player fired — only counts as combat when hostiles are close. */
-  public notePlayerFired(): void {
-    if (this.threat.nearEnemies > 0) this.lastCombatEventAt = performance.now() / 1000;
-  }
-
-  public notePlayerHit(): void {
-    this.lastCombatEventAt = performance.now() / 1000;
-  }
-
-  public getPhase(): MusicPhase {
-    return this.director.phase;
+  /** Where the song is right now (used by the dev hook / tests in the browser). */
+  public getStatus(): MusicStatus {
+    const pos = locate(IRON_BOW, this.step);
+    return {
+      title: IRON_BOW.title,
+      playing: this.started && !this.muted,
+      muted: this.muted,
+      section: pos.section.id,
+      bar: pos.bar,
+      bpm: Math.round(pos.bpm),
+    };
   }
 
   // ---- graph -------------------------------------------------------------
@@ -253,112 +190,55 @@ class AdaptiveScoreEngine {
   private buildGraph(): void {
     const ctx = this.ctx!;
     const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -18;
-    comp.ratio.value = 4;
-    comp.attack.value = 0.01;
-    comp.release.value = 0.25;
+    comp.threshold.value = -16;
+    comp.ratio.value = 3.5;
+    comp.attack.value = 0.015;
+    comp.release.value = 0.3;
     comp.connect(ctx.destination);
 
     this.master = ctx.createGain();
     this.master.gain.value = 0;
     this.master.connect(comp);
 
-    // Cold, long hall: 5 s stereo impulse with a bright, slowly darkening tail.
+    // Large, cold stone hall: 4.5 s stereo tail that darkens as it decays.
     this.reverb = ctx.createConvolver();
-    const len = Math.floor(ctx.sampleRate * 5);
+    const len = Math.floor(ctx.sampleRate * 4.5);
     const ir = ctx.createBuffer(2, len, ctx.sampleRate);
     for (let c = 0; c < 2; c++) {
       const d = ir.getChannelData(c);
       let lp = 0;
       for (let i = 0; i < len; i++) {
         const tNorm = i / len;
-        const white = Math.random() * 2 - 1;
-        const smoothing = 0.15 + tNorm * 0.7; // darker as it decays
-        lp = lp * smoothing + white * (1 - smoothing);
-        d[i] = lp * Math.pow(1 - tNorm, 3.4);
+        const smoothing = 0.2 + tNorm * 0.68;
+        lp = lp * smoothing + (Math.random() * 2 - 1) * (1 - smoothing);
+        d[i] = lp * Math.pow(1 - tNorm, 3);
       }
     }
     this.reverb.buffer = ir;
-    this.reverbReturn = ctx.createGain();
-    this.reverbReturn.gain.value = 0.8;
-    this.reverb.connect(this.reverbReturn);
-    this.reverbReturn.connect(this.master);
+    const reverbReturn = ctx.createGain();
+    reverbReturn.gain.value = 0.9;
+    this.reverb.connect(reverbReturn);
+    reverbReturn.connect(this.master);
 
-    const mk = (name: LayerName): Layer => {
-      const gain = ctx.createGain();
-      gain.gain.value = 0;
-      gain.connect(this.master);
+    const bus = (voice: Voice): GainNode => {
+      const spec = VOICES[voice];
+      const g = ctx.createGain();
+      g.gain.value = 1;
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = spec.pan;
+      g.connect(pan);
+      pan.connect(this.master);
       const send = ctx.createGain();
-      send.gain.value = LAYER_SEND[name];
-      gain.connect(send);
+      send.gain.value = spec.reverbSend;
+      pan.connect(send);
       send.connect(this.reverb);
-      return { gain, send };
+      return g;
     };
-    this.layers = {
-      pad: mk('pad'),
-      taps: mk('taps'),
-      drums: mk('drums'),
-      bass: mk('bass'),
-      strings: mk('strings'),
-      outro: mk('outro'),
-    };
+    this.buses = { contrabass: bus('contrabass'), cello: bus('cello'), violin: bus('violin') };
 
-    // Shared white noise
     this.noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const nd = this.noise.getChannelData(0);
     for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
-
-    // Bass distortion curve
-    const n = 1024;
-    this.distCurve = new Float32Array(new ArrayBuffer(n * 4));
-    const k = 28;
-    for (let i = 0; i < n; i++) {
-      const x = (i * 2) / n - 1;
-      this.distCurve[i] = ((3 + k) * x * 20 * (Math.PI / 180)) / (Math.PI + k * Math.abs(x));
-    }
-
-    // Ambient pad — 3 chord voices x 2 detuned saws, through a slowly breathing lowpass.
-    this.padFilter = ctx.createBiquadFilter();
-    this.padFilter.type = 'lowpass';
-    this.padFilter.frequency.value = 520;
-    this.padFilter.Q.value = 2.2;
-    const padGain = ctx.createGain();
-    padGain.gain.value = 0.07;
-    this.padFilter.connect(padGain);
-    padGain.connect(this.layers.pad.gain);
-
-    const lfo = ctx.createOscillator();
-    lfo.frequency.value = 0.06;
-    const lfoDepth = ctx.createGain();
-    lfoDepth.gain.value = 240;
-    lfo.connect(lfoDepth);
-    lfoDepth.connect(this.padFilter.frequency);
-    lfo.start();
-
-    const first = PROGRESSION[0];
-    for (let v = 0; v < 3; v++) {
-      const voice: OscillatorNode[] = [];
-      for (const detune of [-9, 7]) {
-        const osc = ctx.createOscillator();
-        osc.type = 'sawtooth';
-        osc.detune.value = detune;
-        osc.frequency.value = midiHz(chordTone(first, v, 12));
-        osc.connect(this.padFilter);
-        osc.start();
-        voice.push(osc);
-      }
-      this.padVoices.push(voice);
-    }
-
-    // Low electrical hum under everything.
-    this.hum = ctx.createOscillator();
-    this.hum.type = 'sine';
-    this.hum.frequency.value = midiHz(first.root);
-    const humGain = ctx.createGain();
-    humGain.gain.value = 0.16;
-    this.hum.connect(humGain);
-    humGain.connect(this.layers.pad.gain);
-    this.hum.start();
   }
 
   private onVisibility = (): void => {
@@ -370,389 +250,279 @@ class AdaptiveScoreEngine {
     }
   };
 
-  private applyMix(phase: MusicPhase, timeConstant: number): void {
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const mix = PHASE_MIX[phase];
-    (Object.keys(mix) as LayerName[]).forEach((name) => {
-      const g = this.layers[name].gain.gain;
-      g.cancelScheduledValues(now);
-      g.setTargetAtTime(mix[name], now, timeConstant);
-    });
-    this.reverbReturn.gain.setTargetAtTime(phase === 'RESOLUTION' ? 1.35 : 0.8, now, 0.4);
-  }
-
-  // ---- director ------------------------------------------------------------
-
-  private updateDirector(): void {
-    const prev = this.director.phase;
-    this.director = nextMusicPhase(this.director, {
-      context: this.context,
-      threat: this.threat,
-      lastCombatEventAt: this.lastCombatEventAt,
-      now: performance.now() / 1000,
-    });
-    const phase = this.director.phase;
-    if (phase === prev || !this.ctx || !this.started) return;
-
-    if (phase === 'RESOLUTION') {
-      this.applyMix(phase, 0.12);
-      this.playResolution();
-      return;
-    }
-    if (prev === 'RESOLUTION') {
-      // Restart the theme from the top of the progression.
-      this.step = 0;
-      this.nextTime = this.ctx.currentTime + 0.15;
-      this.applyMix(phase, 1.2);
-      return;
-    }
-    const rising = (phase === 'COMBAT') || (phase === 'ASSAULT' && prev === 'AMBIENT');
-    this.applyMix(phase, rising ? 0.18 : 1.6);
-    if (phase === 'COMBAT' && prev !== 'COMBAT') {
-      const t = this.nextTime;
-      this.boom(t, 1, this.layers.drums.gain);
-      this.clang(t, 1);
-    }
-  }
+  // ---- sequencing ----------------------------------------------------------
 
   private tick = (): void => {
     if (!this.ctx || this.muted) return;
-    this.updateDirector();
     const now = this.ctx.currentTime;
     if (this.nextTime < now - 0.25) this.nextTime = now + 0.05; // recovered from a stall
-    while (this.nextTime < now + 0.12) {
-      this.scheduleStep(this.step, this.nextTime);
-      this.nextTime += SIXTEENTH;
-      this.step++;
+    while (this.nextTime < now + LOOKAHEAD_SEC) {
+      const sixteenth = 60 / locate(IRON_BOW, this.step).bpm / 4;
+      this.scheduleStep(this.step, this.nextTime, sixteenth);
+      this.nextTime += sixteenth;
+      this.step = (this.step + 1) % IRON_BOW.totalSteps;
     }
   };
 
-  // ---- sequencing ----------------------------------------------------------
+  private scheduleStep(step: number, t: number, sixteenth: number): void {
+    const pos = locate(IRON_BOW, step);
+    const notes = IRON_BOW.melodyByStep.get(step) ?? [];
 
-  private scheduleStep(step: number, t: number): void {
-    const phase = this.director.phase;
-    if (phase === 'RESOLUTION') return;
+    for (const n of notes) this.playMelody(n, t, sixteenth);
 
-    const bar = Math.floor(step / 16);
-    const s16 = step % 16;
-    const s32 = step % 32;
-    const chord = PROGRESSION[Math.floor(bar / 2) % PROGRESSION.length];
-    const lastBarOfPhrase = bar % 4 === 3;
-
-    if (s32 === 0) this.setPadChord(chord, t);
-
-    // ---- Phase 1 layer: distant metallic taps ("Shadows stretch across the iron wire")
-    const tapLine = Math.floor(step / 32) % 2 === 0 ? LYRIC_SHADOWS : LYRIC_GRID;
-    for (const syl of tapLine) {
-      if (syl.slot !== s32) continue;
-      if (Math.random() > (syl.stressed ? 0.9 : 0.45)) continue;
-      const pitch = midiHz(chordTone(chord, syl.tone, 48));
-      this.metalTap(t, syl.stressed ? 0.55 : 0.25, pitch, syl.stressed ? 1.1 : 0.5);
-      if (syl.text === 'FIRE') this.padSwell(t);
-    }
-
-    if (phase === 'AMBIENT') return;
-    const combat = phase === 'COMBAT';
-
-    // ---- Phase 2: industrial march drums
-    if (s16 === 0 || s16 === 8) this.kick(t, 1);
-    if (combat && (s16 === 3 || s16 === 10 || s16 === 11)) this.kick(t, 0.75);
-    if (!combat && s16 === 10 && bar % 2 === 1) this.kick(t, 0.55);
-
-    const fill = lastBarOfPhrase && s16 >= (combat ? 8 : 12);
-    if (fill) {
-      this.tom(t, 0.7 + (s16 - 8) * 0.03, 150 - (s16 - 8) * 9);
-    } else if (s16 === 4 || s16 === 12) {
-      this.clang(t, combat ? 1 : 0.8);
-    }
-    if (combat && s16 === 14) this.metalTap(t, 0.35, 260, 0.25, this.layers.drums.gain);
-
-    if (combat) this.hat(t, s16 % 4 === 0 ? 0.32 : s16 % 2 === 0 ? 0.22 : 0.14);
-    else if (s16 % 2 === 0) this.hat(t, s16 % 4 === 0 ? 0.28 : 0.16);
-
-    // ---- Phase 2: rolling distorted bass ("Brick by brick, we break the monolith")
-    const bassHit = LYRIC_BRICK.find((s) => s.slot === s32);
-    if (bassHit) {
-      const m = chordTone(chord, bassHit.tone, 0);
-      this.bassNote(t, m, bassHit.stressed ? SIXTEENTH * 1.8 : SIXTEENTH * 0.9, bassHit.stressed ? 0.95 : 0.6);
-    } else if (combat || s16 % 2 === 0) {
-      const m = chord.root + (combat && s16 % 2 === 1 ? 12 : 0);
-      this.bassNote(t, m, SIXTEENTH * 0.75, combat ? 0.42 : 0.34);
-    }
-
-    if (!combat) return;
-
-    // ---- Phase 3: booming lows + piercing strings ("Stand your ground against the steel brigade!")
-    if (s32 === 0) this.boom(t, 0.9, this.layers.drums.gain);
-    if (s32 === 16) this.boom(t, 0.55, this.layers.drums.gain);
-
-    // String tremolo bed, root/fifth alternating in octave 4.
-    this.stringNote(t, chordTone(chord, s16 % 2 === 0 ? 0 : 2, 24), SIXTEENTH * 0.9, 0.12, true);
-
-    const idx = LYRIC_STAND.findIndex((s) => s.slot === s32);
-    if (idx >= 0) {
-      const syl = LYRIC_STAND[idx];
-      const nextSlot = idx + 1 < LYRIC_STAND.length ? LYRIC_STAND[idx + 1].slot : 32;
-      const dur = (nextSlot - syl.slot) * SIXTEENTH * 0.94;
-      this.stringNote(t, chordTone(chord, syl.tone, 36), dur, syl.stressed ? 0.42 : 0.26, false);
+    for (const part of pos.section.parts) {
+      this.playPart(part, {
+        t,
+        s: pos.stepInBar,
+        bar: pos.bar,
+        rel: pos.rel,
+        chord: pos.chord,
+        dyn: pos.dynamics,
+        sixteenth,
+        melodyHere: notes.filter((n) => !n.doubled),
+      });
     }
   }
 
-  private setPadChord(chord: Chord, t: number): void {
-    this.padVoices.forEach((voice, v) => {
-      const f = midiHz(chordTone(chord, v, 12));
-      voice.forEach((osc) => osc.frequency.setTargetAtTime(f, t, 0.35));
-    });
-    this.hum.frequency.setTargetAtTime(midiHz(chord.root), t, 0.5);
+  private playMelody(n: ScoreNote, t: number, sixteenth: number): void {
+    const dur = n.dur * sixteenth;
+    // A legato line overlaps slightly into the next note, like a bow change.
+    const len = n.articulation === 'legato' ? dur * 1.04 : dur;
+    const vel = (n.stressed ? 0.95 : 0.7) * n.velocity;
+    this.bowed(t, n.midi, len, vel, n.voice, n.articulation);
   }
 
-  /** "a quiet, growing fire" — the pad filter blooms open and settles back. */
-  private padSwell(t: number): void {
-    const f = this.padFilter.frequency;
-    f.cancelScheduledValues(t);
-    f.setValueAtTime(520, t);
-    f.linearRampToValueAtTime(1500, t + 1.4);
-    f.linearRampToValueAtTime(520, t + 4);
-  }
-
-  /** Phase 4: cut, final impact, the last line spoken in stabs, then a cold open-fifth tail. */
-  private playResolution(): void {
-    const ctx = this.ctx!;
-    const out = this.layers.outro.gain;
-    const t0 = ctx.currentTime + 0.08;
-    const dm = PROGRESSION[0];
-
-    this.boom(t0, 1, out);
-    this.clang(t0, 0.9, out);
-    [0, 1, 2].forEach((i) => this.stringNote(t0, chordTone(dm, i, 24), 1.4, 0.22, false, out));
-
-    const eighth = SIXTEENTH * 2;
-    const start = t0 + 1.6;
-    LYRIC_SECTOR.forEach((syl, i) => {
-      const t = start + syl.slot * eighth;
-      const fade = 1 - (i / LYRIC_SECTOR.length) * 0.6;
-      if (syl.text === 'NOW') return;
-      this.metalTap(t, (syl.stressed ? 0.5 : 0.2) * fade, midiHz(chordTone(dm, syl.tone + 3, 48)), syl.stressed ? 1.6 : 0.6, out);
-      if (syl.stressed) this.stringNote(t, chordTone(dm, syl.tone, 36), eighth * 1.6, 0.16 * fade, false, out);
-    });
-
-    // "...belongs to us NOW" — open fifth D–A–E, no third: cold, unresolved, echoing out.
-    const tNow = start + LYRIC_SECTOR[LYRIC_SECTOR.length - 1].slot * eighth;
-    [50, 57, 64, 69].forEach((m) => this.stringNote(tNow, m, 4.5, 0.13, false, out, 1.2));
-    this.boom(tNow, 0.5, out);
+  private playPart(
+    part: Part,
+    c: {
+      t: number;
+      s: number;
+      bar: number;
+      rel: number;
+      chord: Chord;
+      dyn: number;
+      sixteenth: number;
+      melodyHere: ScoreNote[];
+    }
+  ): void {
+    const { t, s, bar, chord, dyn, sixteenth: x } = c;
+    switch (part) {
+      // Marching boots in the mud: driving staccato eighths, accents on the beat.
+      case 'bassMarch': {
+        if (s % 2 !== 0) return;
+        const accent = s % 8 === 0 ? 1 : s % 4 === 0 ? 0.75 : 0.55;
+        const m = s === 6 || s === 14 ? chord.root + 12 : chord.root;
+        this.bowed(t, m, x * 1.2, accent * 0.85 * dyn, 'contrabass', 'staccato');
+        return;
+      }
+      case 'bassDrone':
+        if (s === 0) this.bowed(t, chord.root, x * 16, 0.42 * dyn, 'contrabass', 'legato');
+        return;
+      // Bridge: a low lub-dub heartbeat.
+      case 'bassHeartbeat':
+        if (s === 0) this.bowed(t, chord.root, x * 2.2, 0.85 * dyn + 0.2, 'contrabass', 'marcato');
+        if (s === 3) this.bowed(t, chord.root, x * 2, 0.6 * dyn + 0.15, 'contrabass', 'marcato');
+        return;
+      // Chorus: thunderous long bowed roots.
+      case 'bassLong':
+        if (s === 0) {
+          this.bowed(t, chord.root, x * 16, 0.95 * dyn, 'contrabass', 'marcato');
+          this.bowed(t, chord.root + 12, x * 16, 0.5 * dyn, 'contrabass', 'marcato');
+        }
+        return;
+      // Verse 1b: sharp, urgent cello counter-line on the off-beats.
+      case 'celloCounter': {
+        if (s % 4 !== 2) return;
+        const tones = chordTones(chord, 43, 4);
+        this.bowed(t, tones[(s >> 2) % 4], x * 1.6, 0.55 * dyn, 'cello', 'marcato');
+        return;
+      }
+      // Chorus: heavy chord stabs — DUM . . . . . DUM . DUM . . . . . . .
+      case 'celloChords': {
+        if (s !== 0 && s !== 6 && s !== 8) return;
+        const len = s === 0 ? 5 : s === 6 ? 1.6 : 6;
+        const vel = (s === 0 ? 0.75 : 0.6) * dyn;
+        for (const m of chordTones(chord, 45, 3)) this.bowed(t, m, x * len, vel, 'cello', 'marcato');
+        return;
+      }
+      // Verse 2: syncopated, jagged cello rhythm.
+      case 'celloJagged': {
+        const hits = [0, 3, 6, 10, 12];
+        const i = hits.indexOf(s);
+        if (i < 0) return;
+        const tones = chordTones(chord, 43, 3);
+        this.bowed(t, tones[i % 2 === 0 ? 0 : 2], x * 1.4, (i === 0 ? 0.75 : 0.55) * dyn, 'cello', 'staccato');
+        return;
+      }
+      // Fast driving spiccato in violins and cellos.
+      case 'spiccato': {
+        const v = chordTones(chord, 62, 3);
+        this.bowed(t, v[[0, 1, 2, 1][s % 4]], x * 0.8, (s % 4 === 0 ? 0.5 : 0.34) * dyn, 'violin', 'spiccato');
+        if (s % 2 === 0) this.bowed(t, chord.root + 12, x * 0.8, 0.4 * dyn, 'cello', 'spiccato');
+        return;
+      }
+      // Verse 2b: sharp, tragic high violin notes.
+      case 'violinPiercing': {
+        if (s !== 0 && s !== 8) return;
+        const tones = chordTones(chord, 79, 3);
+        this.bowed(t, tones[(bar + (s ? 1 : 0)) % 3], x * 6, 0.5 * dyn, 'violin', 'marcato');
+        return;
+      }
+      // Outro: violins climbing to a fever pitch, one chord tone higher every bar.
+      case 'feverRun': {
+        const tones = chordTones(chord, 69 + bar * 3, 4);
+        this.bowed(t, tones[s % 4], x * 0.8, (0.32 + bar * 0.08) * dyn, 'violin', 'spiccato');
+        return;
+      }
+      // Outro: a heavy chord under every word, then the massive final chord under "US".
+      case 'finalStabs': {
+        for (const n of c.melodyHere) {
+          if (!n.stressed && n.dur < 8) continue;
+          const len = n.dur * x;
+          const vel = Math.min(1, n.velocity);
+          this.bowed(t, chord.root, len, vel, 'contrabass', 'marcato');
+          this.bowed(t, chord.root + 12, len, vel * 0.6, 'contrabass', 'marcato');
+          for (const m of chordTones(chord, 45, 3)) this.bowed(t, m, len, vel * 0.7, 'cello', 'marcato');
+        }
+        return;
+      }
+    }
   }
 
   // ---- instruments ---------------------------------------------------------
 
-  private noiseSource(t: number): AudioBufferSourceNode {
-    const src = this.ctx!.createBufferSource();
-    src.buffer = this.noise;
-    src.start(t, Math.random() * 1.5);
-    return src;
-  }
-
-  private envGain(t: number, peak: number, attack: number, decay: number): GainNode {
-    const g = this.ctx!.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(peak, t + attack);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
-    return g;
-  }
-
-  /** Inharmonic struck-metal partials (pipes, rebar, wire). */
-  private metalTap(t: number, vel: number, baseHz: number, decay: number, dest?: AudioNode): void {
+  /** One bowed note on a string section: detuned saws, body resonance, vibrato, bow noise. */
+  private bowed(t: number, midi: number, dur: number, vel: number, voice: Voice, art: Articulation): void {
+    if (vel <= 0.001 || dur <= 0) return;
     const ctx = this.ctx!;
-    const env = this.envGain(t, vel * 0.09, 0.002, decay);
-    const hp = ctx.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = Math.min(baseHz * 0.8, 1800);
-    hp.connect(env);
-    env.connect(dest ?? this.layers.taps.gain);
-    [1, 1.483, 2.17, 2.93, 3.71].forEach((r) => {
-      const o = ctx.createOscillator();
-      o.type = 'square';
-      o.frequency.value = baseHz * r;
-      o.connect(hp);
-      o.start(t);
-      o.stop(t + decay + 0.05);
-    });
-  }
-
-  private kick(t: number, vel: number): void {
-    const ctx = this.ctx!;
-    const o = ctx.createOscillator();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(140, t);
-    o.frequency.exponentialRampToValueAtTime(42, t + 0.14);
-    const g = this.envGain(t, vel * 0.9, 0.003, 0.42);
-    const shaper = ctx.createWaveShaper();
-    shaper.curve = this.distCurve;
-    o.connect(shaper);
-    shaper.connect(g);
-    g.connect(this.layers.drums.gain);
-    o.start(t);
-    o.stop(t + 0.5);
-  }
-
-  /** Industrial snare: noise crack plus a struck steel plate. */
-  private clang(t: number, vel: number, dest?: AudioNode): void {
-    const ctx = this.ctx!;
-    const target = dest ?? this.layers.drums.gain;
-    const n = this.noiseSource(t);
-    const bp = ctx.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 1500;
-    bp.Q.value = 1.1;
-    const g = this.envGain(t, vel * 0.55, 0.002, 0.22);
-    n.connect(bp);
-    bp.connect(g);
-    g.connect(target);
-    n.stop(t + 0.3);
-    this.metalTap(t, vel * 1.4, 210, 0.38, target);
-  }
-
-  private hat(t: number, vel: number): void {
-    const ctx = this.ctx!;
-    const n = this.noiseSource(t);
-    const hp = ctx.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 7200;
-    const g = this.envGain(t, vel * 0.32, 0.001, 0.045);
-    n.connect(hp);
-    hp.connect(g);
-    g.connect(this.layers.drums.gain);
-    n.stop(t + 0.08);
-  }
-
-  private tom(t: number, vel: number, hz: number): void {
-    const ctx = this.ctx!;
-    const o = ctx.createOscillator();
-    o.type = 'triangle';
-    o.frequency.setValueAtTime(hz, t);
-    o.frequency.exponentialRampToValueAtTime(hz * 0.55, t + 0.2);
-    const g = this.envGain(t, vel * 0.6, 0.002, 0.26);
-    o.connect(g);
-    g.connect(this.layers.drums.gain);
-    o.start(t);
-    o.stop(t + 0.3);
-  }
-
-  /** Sub-bass impact with a low rumble. */
-  private boom(t: number, vel: number, dest: AudioNode): void {
-    const ctx = this.ctx!;
-    const o = ctx.createOscillator();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(62, t);
-    o.frequency.exponentialRampToValueAtTime(27, t + 1.6);
-    const g = this.envGain(t, vel * 0.85, 0.01, 2.2);
-    o.connect(g);
-    g.connect(dest);
-    o.start(t);
-    o.stop(t + 2.4);
-
-    const n = this.noiseSource(t);
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 140;
-    const ng = this.envGain(t, vel * 0.5, 0.02, 1.4);
-    n.connect(lp);
-    lp.connect(ng);
-    ng.connect(dest);
-    n.stop(t + 1.6);
-  }
-
-  private bassNote(t: number, midi: number, dur: number, vel: number): void {
-    const ctx = this.ctx!;
+    const spec = VOICES[voice];
     const f = midiHz(midi);
-    const shaper = ctx.createWaveShaper();
-    shaper.curve = this.distCurve;
-    shaper.oversample = '2x';
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.Q.value = 4;
-    lp.frequency.setValueAtTime(1300 * vel + 200, t);
-    lp.frequency.exponentialRampToValueAtTime(220, t + dur);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(vel * 0.3, t + 0.006);
-    g.gain.setValueAtTime(vel * 0.3, t + dur * 0.7);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.05);
-    shaper.connect(lp);
-    lp.connect(g);
-    g.connect(this.layers.bass.gain);
-    [-6, 6].forEach((detune) => {
-      const o = ctx.createOscillator();
-      o.type = 'sawtooth';
-      o.frequency.value = f;
-      o.detune.value = detune;
-      o.connect(shaper);
-      o.start(t);
-      o.stop(t + dur + 0.08);
-    });
-  }
 
-  /** Bowed-string ensemble: three detuned saws with vibrato and a bright presence peak. */
-  private stringNote(
-    t: number,
-    midi: number,
-    dur: number,
-    vel: number,
-    tremolo: boolean,
-    dest?: AudioNode,
-    attack = tremolo ? 0.008 : 0.05
-  ): void {
-    const ctx = this.ctx!;
-    const f = midiHz(midi);
+    let attack = 0.06;
+    let release = 0.28;
+    let len = dur;
+    let accent = 1;
+    switch (art) {
+      case 'legato':
+        attack = voice === 'contrabass' ? 0.1 : 0.08;
+        release = 0.35;
+        break;
+      case 'marcato':
+        attack = 0.014;
+        release = 0.22;
+        accent = 1.35;
+        break;
+      case 'staccato':
+        attack = 0.008;
+        release = 0.09;
+        len = Math.min(dur, 0.13);
+        break;
+      case 'spiccato':
+        attack = 0.005;
+        release = 0.06;
+        len = Math.min(dur, 0.08);
+        break;
+      case 'tremolo':
+        attack = 0.05;
+        release = 0.3;
+        break;
+    }
+    const level = vel * spec.level;
+    const sustainEnd = t + Math.max(attack, len - 0.02);
+    const stopAt = sustainEnd + release + 0.05;
+
     const hp = ctx.createBiquadFilter();
     hp.type = 'highpass';
-    hp.frequency.value = 280;
-    const peak = ctx.createBiquadFilter();
-    peak.type = 'peaking';
-    peak.frequency.value = 2900;
-    peak.gain.value = 7;
-    peak.Q.value = 1.1;
+    hp.frequency.value = spec.highpass;
+    const body = ctx.createBiquadFilter();
+    body.type = 'peaking';
+    body.frequency.value = spec.bodyHz;
+    body.gain.value = spec.bodyGain;
+    body.Q.value = 1;
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = 6500;
-    const g = ctx.createGain();
-    const level = vel * 0.11;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(level, t + attack);
-    g.gain.setValueAtTime(level, t + Math.max(attack, dur - 0.05));
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur + (tremolo ? 0.04 : 0.35));
-    hp.connect(peak);
-    peak.connect(lp);
-    lp.connect(g);
-    g.connect(dest ?? this.layers.strings.gain);
+    lp.Q.value = 0.7;
+    // Brighter at the start of the stroke, mellowing as the bow settles.
+    const bright = Math.min(spec.lowpass * (0.65 + vel * 0.5), 12000);
+    lp.frequency.setValueAtTime(bright * (art === 'legato' ? 0.7 : 1.15), t);
+    lp.frequency.setTargetAtTime(bright, t + attack, 0.08);
 
-    const stopAt = t + dur + 0.45;
-    let vib: OscillatorNode | null = null;
+    const amp = ctx.createGain();
+    amp.gain.setValueAtTime(0.0001, t);
+    if (accent > 1) {
+      amp.gain.linearRampToValueAtTime(level * accent, t + attack);
+      amp.gain.setTargetAtTime(level * 0.78, t + attack, 0.09);
+    } else {
+      amp.gain.linearRampToValueAtTime(level, t + attack);
+    }
+    amp.gain.setValueAtTime(accent > 1 ? level * 0.78 : level, sustainEnd);
+    amp.gain.exponentialRampToValueAtTime(0.0001, sustainEnd + release);
+
+    hp.connect(body);
+    body.connect(lp);
+    lp.connect(amp);
+
+    let out: AudioNode = amp;
+    if (art === 'tremolo') {
+      // Fast bow tremolo: amplitude chopped at ~13 Hz.
+      const trem = ctx.createGain();
+      trem.gain.value = 0.55;
+      const lfo = ctx.createOscillator();
+      lfo.type = 'triangle';
+      lfo.frequency.value = 13;
+      const depth = ctx.createGain();
+      depth.gain.value = 0.45;
+      lfo.connect(depth);
+      depth.connect(trem.gain);
+      lfo.start(t);
+      lfo.stop(stopAt);
+      amp.connect(trem);
+      out = trem;
+    }
+    out.connect(this.buses[voice]);
+
+    // Vibrato blooms in on held notes only.
     let vibDepth: GainNode | null = null;
-    if (!tremolo) {
-      vib = ctx.createOscillator();
-      vib.frequency.value = 5.4;
+    if (len > 0.25 && art !== 'staccato' && art !== 'spiccato') {
+      const vib = ctx.createOscillator();
+      vib.frequency.value = spec.vibratoHz * (0.94 + Math.random() * 0.12);
       vibDepth = ctx.createGain();
       vibDepth.gain.setValueAtTime(0, t);
-      vibDepth.gain.linearRampToValueAtTime(9, t + Math.min(0.4, dur));
+      vibDepth.gain.linearRampToValueAtTime(spec.vibratoCents, t + Math.min(0.45, len * 0.6));
       vib.connect(vibDepth);
       vib.start(t);
       vib.stop(stopAt);
     }
-    const detunes = tremolo ? [-5, 5] : [-11, 0, 10];
-    detunes.forEach((d) => {
+    for (const d of spec.detunes) {
       const o = ctx.createOscillator();
       o.type = 'sawtooth';
       o.frequency.value = f;
-      o.detune.value = d;
+      o.detune.value = d + (Math.random() - 0.5) * 4;
       if (vibDepth) vibDepth.connect(o.detune);
       o.connect(hp);
       o.start(t);
       o.stop(stopAt);
-    });
+    }
+
+    // Rosin "bite" of the bow on attacked notes.
+    if (art !== 'legato' && art !== 'tremolo') {
+      const n = ctx.createBufferSource();
+      n.buffer = this.noise;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = Math.min(f * 4, 6000);
+      bp.Q.value = 1.4;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(level * 0.5 * accent, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+      n.connect(bp);
+      bp.connect(g);
+      g.connect(this.buses[voice]);
+      n.start(t, Math.random() * 1.5);
+      n.stop(t + 0.08);
+    }
   }
 }
 
-export const musicEngine = new AdaptiveScoreEngine();
-export { NEAR_ENEMY_RANGE };
-export type { MusicContext, MusicPhase };
+export const musicEngine = new IronBowEngine();
