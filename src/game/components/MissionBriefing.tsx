@@ -1,7 +1,7 @@
-import React from 'react';
-import { ACT_TITLES, CAMPAIGN_PROLOGUE, Mission, MISSIONS } from '../campaign/campaignData';
-import { FactionId } from '../types/systems';
-import { CheckCircle2, Cloud, Play, Radio } from 'lucide-react';
+import React from "react";
+import { ACT_TITLES, CAMPAIGN_PROLOGUE, Mission, MISSIONS } from "../campaign/campaignData";
+import { FactionId } from "../types/systems";
+import { CheckCircle2, Cloud, Play, Radio } from "lucide-react";
 
 interface MissionBriefingProps {
   /** Mission just finished (shows the debrief first). */
@@ -22,7 +22,7 @@ export const MissionBriefing: React.FC<MissionBriefingProps> = ({
   onContinueDebrief,
   onBeginMission,
 }) => {
-  const plateLabel = faction === FactionId.EAST ? 'composite plates' : 'ERA blocks';
+  const plateLabel = faction === FactionId.EAST ? "composite plates" : "ERA blocks";
 
   if (debrief) {
     const finale = !mission;
@@ -33,27 +33,33 @@ export const MissionBriefing: React.FC<MissionBriefingProps> = ({
             <CheckCircle2 className="w-4 h-4" />
             <span>Mission {debrief.number} complete</span>
           </div>
-          <h2 className="font-display text-4xl font-bold tracking-wide text-white uppercase">{debrief.title}</h2>
+          <h2 className="font-display text-4xl font-bold tracking-wide text-white uppercase">
+            {debrief.title}
+          </h2>
           <p className="text-sm text-slate-300 leading-relaxed">{debrief.outro}</p>
           <div className="text-sm font-mono text-[#F59E0B] tabular-nums">
-            +{debrief.reward.scrap} alloy · +{debrief.reward.plates} {plateLabel} · +{debrief.reward.chips} chips
+            +{debrief.reward.scrap} alloy · +{debrief.reward.plates} {plateLabel} · +
+            {debrief.reward.chips} chips
           </div>
           {finale && (
             <p className="text-sm text-emerald-300">
-              The Ledger is broken and Varos-Meridian is free. Thank you for seeing it through, operator.
+              The Ledger is broken and Varos-Meridian is free. Thank you for seeing it through,
+              operator.
             </p>
           )}
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800">
             <span className="text-xs text-slate-400 flex items-center gap-1.5">
               <Cloud className="w-3.5 h-3.5" />
-              {signedIn ? 'Progress saved to your account.' : 'Saved in this browser. Sign in with Google on the home page to keep it safe online.'}
+              {signedIn
+                ? "Progress saved to your account."
+                : "Saved in this browser. Sign in with Google on the home page to keep it safe online."}
             </span>
             <button
               type="button"
               onClick={onContinueDebrief}
               className="px-6 py-3 rounded-xl bg-[#F59E0B] hover:bg-amber-400 text-slate-950 font-display text-lg font-bold tracking-wider uppercase transition-colors cursor-pointer"
             >
-              {finale ? 'Return to the city' : 'Continue'}
+              {finale ? "Return to the city" : "Continue"}
             </button>
           </div>
         </div>
@@ -78,7 +84,9 @@ export const MissionBriefing: React.FC<MissionBriefingProps> = ({
         )}
         {opensAct && (
           <div>
-            <div className="font-display text-2xl font-bold tracking-wide text-[#F59E0B] uppercase">{act.title}</div>
+            <div className="font-display text-2xl font-bold tracking-wide text-[#F59E0B] uppercase">
+              {act.title}
+            </div>
             <div className="text-xs text-slate-400">{act.subtitle}</div>
           </div>
         )}
@@ -86,7 +94,9 @@ export const MissionBriefing: React.FC<MissionBriefingProps> = ({
           <div className="text-xs font-mono uppercase tracking-widest text-slate-400">
             Mission {mission.number} of {MISSIONS.length} · {mission.location}
           </div>
-          <h2 className="font-display text-4xl font-bold tracking-wide text-white uppercase">{mission.title}</h2>
+          <h2 className="font-display text-4xl font-bold tracking-wide text-white uppercase">
+            {mission.title}
+          </h2>
         </div>
         <div className="space-y-2.5 text-sm text-slate-200 leading-relaxed">
           {mission.briefing.map((line) => (

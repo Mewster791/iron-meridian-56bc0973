@@ -1,7 +1,7 @@
-import * as THREE from 'three';
-import { FactionId } from '../types/systems';
-import { StaticWorldPhysics } from '../systems/staticCollisionSystem';
-import { ProceduralMaterialLibrary } from './proceduralTextures';
+import * as THREE from "three";
+import { FactionId } from "../types/systems";
+import { StaticWorldPhysics } from "../systems/staticCollisionSystem";
+import { ProceduralMaterialLibrary } from "./proceduralTextures";
 
 export interface OperatorRigRefs {
   root: THREE.Group;
@@ -37,24 +37,21 @@ export interface CommandVehicleRefs {
   wheels: THREE.Mesh[];
 }
 
-export function buildOperatorModel(
-  faction: FactionId,
-  isEnemy = false
-): OperatorRigRefs {
+export function buildOperatorModel(faction: FactionId, isEnemy = false): OperatorRigRefs {
   const root = new THREE.Group();
   const bodyGroup = new THREE.Group();
   root.add(bodyGroup);
 
   const uniformHex = isEnemy
     ? faction === FactionId.EAST
-      ? '#3e4a3b'
-      : '#5e5547'
+      ? "#3e4a3b"
+      : "#5e5547"
     : faction === FactionId.EAST
-      ? '#364538'
-      : '#4e5649';
+      ? "#364538"
+      : "#4e5649";
 
-  const armorHex = isEnemy ? '#2b2525' : '#22282f';
-  const accentHex = isEnemy ? '#ef4444' : faction === FactionId.EAST ? '#f59e0b' : '#38bdf8';
+  const armorHex = isEnemy ? "#2b2525" : "#22282f";
+  const accentHex = isEnemy ? "#ef4444" : faction === FactionId.EAST ? "#f59e0b" : "#38bdf8";
 
   const clothMat = new THREE.MeshStandardMaterial({
     color: uniformHex,
@@ -67,12 +64,12 @@ export function buildOperatorModel(
     metalness: 0.38,
   });
   const steelMat = new THREE.MeshStandardMaterial({
-    color: '#181d23',
+    color: "#181d23",
     roughness: 0.25,
     metalness: 0.88,
   });
   const bladeMat = new THREE.MeshStandardMaterial({
-    color: '#e2ebf5',
+    color: "#e2ebf5",
     roughness: 0.12,
     metalness: 0.96,
   });
@@ -134,7 +131,7 @@ export function buildOperatorModel(
   const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.26, 0.26), clothMat);
   const helmetMesh = new THREE.Mesh(
     new THREE.SphereGeometry(0.175, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.62),
-    plateMat
+    plateMat,
   );
   helmetMesh.position.y = 0.03;
   helmetMesh.castShadow = true;
@@ -219,7 +216,7 @@ export function buildOperatorModel(
       opacity: 0.48,
       side: THREE.DoubleSide,
       depthWrite: false,
-    })
+    }),
   );
   swordTrailMesh.rotation.x = -Math.PI / 2;
   swordTrailMesh.position.set(0, 1.15, -0.45);
@@ -246,27 +243,28 @@ export function buildOperatorModel(
 
 export function buildFirstPersonViewmodel(faction: FactionId): FirstPersonViewmodelRefs {
   const root = new THREE.Group();
-  const accentHex = faction === FactionId.EAST ? '#f59e0b' : '#38bdf8';
+  const accentHex = faction === FactionId.EAST ? "#f59e0b" : "#38bdf8";
 
   const steelMat = new THREE.MeshStandardMaterial({
-    color: faction === FactionId.EAST ? '#1a1f25' : '#38342e',
+    color: faction === FactionId.EAST ? "#1a1f25" : "#38342e",
     roughness: 0.26,
     metalness: 0.88,
   });
   const polymerMat = new THREE.MeshStandardMaterial({
-    color: faction === FactionId.EAST ? '#25292e' : '#574e3f',
+    color: faction === FactionId.EAST ? "#25292e" : "#574e3f",
     roughness: 0.64,
     metalness: 0.24,
   });
   const reticleGlow = new THREE.MeshBasicMaterial({ color: accentHex });
   const bladeMat = new THREE.MeshStandardMaterial({
-    color: '#e2ebf5',
+    color: "#e2ebf5",
     roughness: 0.12,
     metalness: 0.97,
   });
 
   const rifleRig = new THREE.Group();
-  rifleRig.position.set(0.24, -0.22, -0.44);
+  rifleRig.position.set(0.15, -0.14, -0.14);
+  rifleRig.scale.setScalar(0.42);
 
   const upperReceiver = new THREE.Mesh(new THREE.BoxGeometry(0.068, 0.095, 0.44), steelMat);
   const handguard = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.078, 0.34), polymerMat);
@@ -300,7 +298,7 @@ export function buildFirstPersonViewmodel(faction: FactionId): FirstPersonViewmo
 
   const muzzleFlashMesh = new THREE.Mesh(
     new THREE.ConeGeometry(0.07, 0.24, 8),
-    new THREE.MeshBasicMaterial({ color: '#fde047', transparent: true, opacity: 0.92 })
+    new THREE.MeshBasicMaterial({ color: "#fde047", transparent: true, opacity: 0.92 }),
   );
   muzzleFlashMesh.rotation.x = -Math.PI / 2;
   muzzleFlashMesh.position.copy(muzzleNode.position);
@@ -317,12 +315,13 @@ export function buildFirstPersonViewmodel(faction: FactionId): FirstPersonViewmo
     holoDot,
     magazineMesh,
     muzzleNode,
-    muzzleFlashMesh
+    muzzleFlashMesh,
   );
 
   // 1st-Person High-Durability Tactical Sword Rig
   const swordRig = new THREE.Group();
-  swordRig.position.set(0.32, -0.28, -0.48);
+  swordRig.position.set(0.18, -0.16, -0.18);
+  swordRig.scale.setScalar(0.45);
   swordRig.rotation.set(0.25, -0.35, 0.35);
   swordRig.visible = false;
 
@@ -335,22 +334,37 @@ export function buildFirstPersonViewmodel(faction: FactionId): FirstPersonViewmo
   fuller.position.y = 0.49;
 
   const swordTrailMesh = new THREE.Mesh(
-    new THREE.RingGeometry(0.35, 0.95, 14, 1, -Math.PI * 0.4, Math.PI * 0.8),
+    new THREE.RingGeometry(0.25, 0.65, 14, 1, -Math.PI * 0.4, Math.PI * 0.8),
     new THREE.MeshBasicMaterial({
       color: accentHex,
       transparent: true,
       opacity: 0.42,
       side: THREE.DoubleSide,
       depthWrite: false,
-    })
+    }),
   );
-  swordTrailMesh.position.set(0, -0.1, -0.75);
+  swordTrailMesh.position.set(0, -0.05, -0.35);
   swordTrailMesh.rotation.x = Math.PI * 0.38;
   swordTrailMesh.visible = false;
   root.add(swordTrailMesh);
 
   swordRig.add(hilt, tsuba, blade, fuller);
   root.add(rifleRig, swordRig);
+
+  // Ensure viewmodel renders on top of world geometry without clipping into nearby walls
+  root.renderOrder = 999;
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (mesh.isMesh && mesh.material) {
+      if (Array.isArray(mesh.material)) {
+        mesh.material.forEach((m) => {
+          m.depthTest = true;
+        });
+      } else {
+        mesh.material.depthTest = true;
+      }
+    }
+  });
 
   return {
     root,
@@ -365,7 +379,7 @@ export function buildFirstPersonViewmodel(faction: FactionId): FirstPersonViewmo
 
 export function buildSquadCommandVehicle(
   faction: FactionId,
-  matLib?: ProceduralMaterialLibrary
+  matLib?: ProceduralMaterialLibrary,
 ): CommandVehicleRefs {
   const root = new THREE.Group();
 
@@ -376,34 +390,34 @@ export function buildSquadCommandVehicle(
     : undefined;
 
   const hullMat = new THREE.MeshStandardMaterial({
-    color: camoTex ? '#ffffff' : faction === FactionId.EAST ? '#354236' : '#4a5246',
+    color: camoTex ? "#ffffff" : faction === FactionId.EAST ? "#354236" : "#4a5246",
     map: camoTex,
     roughness: 0.62,
     metalness: 0.38,
   });
   const darkMetalMat = new THREE.MeshStandardMaterial({
-    color: '#1b2026',
+    color: "#1b2026",
     roughness: 0.32,
     metalness: 0.84,
   });
   const rubberMat = new THREE.MeshStandardMaterial({
-    color: '#15171a',
+    color: "#15171a",
     roughness: 0.9,
     metalness: 0.06,
   });
   const headlightMat = new THREE.MeshStandardMaterial({
-    color: '#fef08a',
-    emissive: '#fef08a',
+    color: "#fef08a",
+    emissive: "#fef08a",
     emissiveIntensity: 0.75,
     roughness: 0.2,
   });
   const eraMat = new THREE.MeshStandardMaterial({
-    color: faction === FactionId.EAST ? '#948160' : '#2e493a',
+    color: faction === FactionId.EAST ? "#948160" : "#2e493a",
     roughness: 0.44,
     metalness: 0.54,
   });
   const apsMat = new THREE.MeshStandardMaterial({
-    color: '#f59e0b',
+    color: "#f59e0b",
     roughness: 0.26,
     metalness: 0.8,
   });
@@ -431,7 +445,10 @@ export function buildSquadCommandVehicle(
     lamp.position.set(hx, 1.18, -3.14);
     root.add(lamp);
   }
-  const whipAntenna = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.025, 2.4, 6), darkMetalMat);
+  const whipAntenna = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.012, 0.025, 2.4, 6),
+    darkMetalMat,
+  );
   whipAntenna.position.set(-1.05, 3.0, 2.3);
   root.add(whipAntenna);
 
@@ -494,7 +511,10 @@ export function buildSquadCommandVehicle(
   for (const side of [-0.96, 0.96]) {
     const radarPanel = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.34, 0.48), apsMat);
     radarPanel.position.set(side, 0.22, 0);
-    const launcherDrum = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.28, 10), darkMetalMat);
+    const launcherDrum = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.16, 0.16, 0.28, 10),
+      darkMetalMat,
+    );
     launcherDrum.position.set(side * 0.85, 0.44, 0.2);
     apsGroup.add(radarPanel, launcherDrum);
   }
@@ -534,22 +554,22 @@ export function buildSquadCommandVehicle(
 export function buildConvoySupplyTruck(enemyFaction: FactionId): THREE.Group {
   const group = new THREE.Group();
   const cabMat = new THREE.MeshStandardMaterial({
-    color: enemyFaction === FactionId.WEST ? '#6e6451' : '#3d4a3a',
+    color: enemyFaction === FactionId.WEST ? "#6e6451" : "#3d4a3a",
     roughness: 0.68,
     metalness: 0.32,
   });
   const tarpMat = new THREE.MeshStandardMaterial({
-    color: enemyFaction === FactionId.WEST ? '#524b3d' : '#2d372b',
+    color: enemyFaction === FactionId.WEST ? "#524b3d" : "#2d372b",
     roughness: 0.86,
     metalness: 0.08,
   });
   const glassMat = new THREE.MeshStandardMaterial({
-    color: '#38bdf8',
+    color: "#38bdf8",
     roughness: 0.14,
     metalness: 0.86,
   });
   const wheelMat = new THREE.MeshStandardMaterial({
-    color: '#17191c',
+    color: "#17191c",
     roughness: 0.9,
     metalness: 0.08,
   });
@@ -567,11 +587,11 @@ export function buildConvoySupplyTruck(enemyFaction: FactionId): THREE.Group {
   const beaconStrip = new THREE.Mesh(
     new THREE.BoxGeometry(2.56, 0.16, 4.18),
     new THREE.MeshStandardMaterial({
-      color: '#f59e0b',
-      emissive: '#f59e0b',
+      color: "#f59e0b",
+      emissive: "#f59e0b",
       emissiveIntensity: 0.5,
       roughness: 0.3,
-    })
+    }),
   );
   beaconStrip.position.set(0, 2.7, 1.15);
 
@@ -593,13 +613,13 @@ export function buildConvoySupplyTruck(enemyFaction: FactionId): THREE.Group {
 export function buildSalvageTechCrate(): THREE.Group {
   const group = new THREE.Group();
   const caseMat = new THREE.MeshStandardMaterial({
-    color: '#2c3540',
+    color: "#2c3540",
     roughness: 0.42,
     metalness: 0.68,
   });
   const latchMat = new THREE.MeshStandardMaterial({
-    color: '#f59e0b',
-    emissive: '#f59e0b',
+    color: "#f59e0b",
+    emissive: "#f59e0b",
     emissiveIntensity: 0.65,
     roughness: 0.22,
     metalness: 0.82,

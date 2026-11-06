@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import * as THREE from 'three';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import React, { useEffect, useRef, useState } from "react";
+import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import {
   CameraRigTelemetry,
   FactionId,
@@ -16,11 +16,8 @@ import {
   SwordState,
   TacticalUnitVehicleState,
   WeaponSlot,
-} from '../types/systems';
-import {
-  DEFAULT_CAMERA_RIG_CONFIG,
-  SeamlessCameraPovController,
-} from '../systems/cameraPovSystem';
+} from "../types/systems";
+import { DEFAULT_CAMERA_RIG_CONFIG, SeamlessCameraPovController } from "../systems/cameraPovSystem";
 import {
   applyIncomingPlayerDamage,
   computeSwordSwingDamage,
@@ -28,7 +25,7 @@ import {
   FACTION_PRIMARY_FIREARMS,
   STANDARD_MEDICAL_GEAR,
   stepPlayerCombatStateMachine,
-} from '../systems/loadoutHealthSystem';
+} from "../systems/loadoutHealthSystem";
 import {
   AVENUE_Z,
   Building,
@@ -44,9 +41,9 @@ import {
   PLAYABLE_HALF_EXTENT,
   Rect,
   sampleCitySupport,
-} from '../city/cityLayout';
-import { buildCityScene } from '../city/cityBuilder';
-import { MISSIONS, MissionStep } from '../campaign/campaignData';
+} from "../city/cityLayout";
+import { buildCityScene } from "../city/cityBuilder";
+import { MISSIONS, MissionStep } from "../campaign/campaignData";
 import {
   CampaignProgress,
   canDetonate,
@@ -65,11 +62,8 @@ import {
   stepDefendTimer,
   stepHoldProgress,
   APC_RESUPPLY_COOLDOWN_SEC,
-} from '../campaign/campaignRules';
-import {
-  resolveDynamicBoxCollision,
-  StaticWorldPhysics,
-} from '../systems/staticCollisionSystem';
+} from "../campaign/campaignRules";
+import { resolveDynamicBoxCollision, StaticWorldPhysics } from "../systems/staticCollisionSystem";
 import {
   buildConvoySupplyTruck,
   buildFirstPersonViewmodel,
@@ -79,17 +73,17 @@ import {
   CommandVehicleRefs,
   FirstPersonViewmodelRefs,
   OperatorRigRefs,
-} from '../three/proceduralModels';
+} from "../three/proceduralModels";
 import {
   ATMOSPHERE_CONFIGS,
   AtmospherePreset,
   createProceduralMaterialLibrary,
   createProceduralSkyDome,
-} from '../three/proceduralTextures';
-import { canAdvanceRetrofitStage } from '../systems/scavengeRetrofitSystem';
-import { CityMapView } from './CityMapView';
-import { audioEngine } from '../systems/audioEngine';
-import { musicEngine } from '../systems/musicEngine';
+} from "../three/proceduralTextures";
+import { canAdvanceRetrofitStage } from "../systems/scavengeRetrofitSystem";
+import { CityMapView } from "./CityMapView";
+import { audioEngine } from "../systems/audioEngine";
+import { musicEngine } from "../systems/musicEngine";
 import {
   Building2,
   ChevronDown,
@@ -102,7 +96,7 @@ import {
   Volume2,
   VolumeX,
   Wrench,
-} from 'lucide-react';
+} from "lucide-react";
 
 /** The city streets are flat; floors and stairs come from sampleCitySupport. */
 const sampleWalkableHeight = (_x: number, _z: number): number => 0;
@@ -136,7 +130,7 @@ interface TacticalArena3DProps {
   onSyncLiveCoords: (
     player: { x: number; z: number; y: number; yaw: number },
     vehicle: { x: number; z: number },
-    convoy: { x: number; z: number; intact: boolean }
+    convoy: { x: number; z: number; intact: boolean },
   ) => void;
   onLootConvoyCrate: () => void;
   onQuickRetrofitNextNode: (resupplied: boolean) => void;
@@ -152,9 +146,9 @@ interface TacticalArena3DProps {
   testerGodMode?: boolean;
 }
 
-export type TesterCommandType = 'KILL_NEAR' | 'KILL_MISSION' | 'DESTROY_CONVOY' | 'HEAL';
+export type TesterCommandType = "KILL_NEAR" | "KILL_MISSION" | "DESTROY_CONVOY" | "HEAL";
 
-type EnemyKind = 'STREET' | 'FLOOR' | 'GUARD' | 'HVT' | 'WAVE';
+type EnemyKind = "STREET" | "FLOOR" | "GUARD" | "HVT" | "WAVE";
 
 interface EnemyActor {
   kind: EnemyKind;
@@ -251,7 +245,9 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
   const atmosphereRef = useRef<AtmospherePreset>(atmosphere);
   const campaignRef = useRef<CampaignProgress>(campaign);
   const squadTargetRef = useRef<{ x: number; z: number } | null>(squadTargetCoords);
-  const deployReqRef = useRef<{ x: number; z: number; y: number; nonce: number } | null>(deployRequest);
+  const deployReqRef = useRef<{ x: number; z: number; y: number; nonce: number } | null>(
+    deployRequest,
+  );
   const simPausedRef = useRef<boolean>(!isRoundActive || isMenuOpen);
 
   const callbacksRef = useRef({
@@ -316,10 +312,20 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     callbacksRef.current.onBuildingDestroyed = onBuildingDestroyed;
     callbacksRef.current.onPlayerDown = onPlayerDown;
     callbacksRef.current.onToast = onToast;
-  }, [onLootConvoyCrate, onQuickRetrofitNextNode, onSyncLiveCoords, onStepComplete, onFloorCleared, onLoot, onBuildingDestroyed, onPlayerDown, onToast]);
+  }, [
+    onLootConvoyCrate,
+    onQuickRetrofitNextNode,
+    onSyncLiveCoords,
+    onStepComplete,
+    onFloorCleared,
+    onLoot,
+    onBuildingDestroyed,
+    onPlayerDown,
+    onToast,
+  ]);
 
   const camControllerRef = useRef<SeamlessCameraPovController>(
-    new SeamlessCameraPovController(DEFAULT_CAMERA_RIG_CONFIG)
+    new SeamlessCameraPovController(DEFAULT_CAMERA_RIG_CONFIG),
   );
   const showBallisticRaysRef = useRef<boolean>(false);
 
@@ -327,14 +333,14 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
   const [muted, setMuted] = useState(false);
   const [nearbyPrompt, setNearbyPrompt] = useState<string | null>(null);
   const [convoyStatusText, setConvoyStatusText] = useState<string>(
-    'Consortium convoy patrolling Grand Avenue'
+    "Consortium convoy patrolling Grand Avenue",
   );
   const [missionHud, setMissionHud] = useState<MissionHudState>({
-    missionLabel: '',
-    stepText: '',
-    detail: '',
+    missionLabel: "",
+    stepText: "",
+    detail: "",
     progress: null,
-    locationLabel: 'Streets of Varos-Meridian',
+    locationLabel: "Streets of Varos-Meridian",
   });
   const [mapWaypoint, setMapWaypoint] = useState<{ x: number; z: number } | null>(null);
   const [pinnedHudProj, setPinnedHudProj] = useState<{
@@ -343,7 +349,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     yPct: number;
     distMeters: number;
     title: string;
-  }>({ visible: false, xPct: 50, yPct: 30, distMeters: 0, title: '' });
+  }>({ visible: false, xPct: 50, yPct: 30, distMeters: 0, title: "" });
 
   const [camTelemetry, setCamTelemetry] = useState<CameraRigTelemetry>({
     targetMode: PerspectiveMode.THIRD_PERSON,
@@ -393,19 +399,19 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
 
     // 1. Software-WebGL Detection & High-Fidelity Renderer Initialization
     const isSoftwareGl = (() => {
-      const probeCanvas = document.createElement('canvas');
-      const gl = probeCanvas.getContext('webgl2');
+      const probeCanvas = document.createElement("canvas");
+      const gl = probeCanvas.getContext("webgl2");
       if (!gl) return true;
-      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      const ext = gl.getExtension("WEBGL_debug_renderer_info");
       const param = ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER;
       const gpu = String(gl.getParameter(param));
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
       return /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
     })();
 
     const renderer = new THREE.WebGLRenderer({
       antialias: !isSoftwareGl,
-      powerPreference: 'high-performance',
+      powerPreference: "high-performance",
     });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -413,19 +419,19 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
     renderer.setSize(
       container.clientWidth || window.innerWidth,
-      container.clientHeight || window.innerHeight
+      container.clientHeight || window.innerHeight,
     );
     renderer.shadowMap.enabled = !isSoftwareGl;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    container.innerHTML = '';
+    container.innerHTML = "";
     container.appendChild(renderer.domElement);
 
     const handleContextLost = (e: Event) => e.preventDefault();
-    renderer.domElement.addEventListener('webglcontextlost', handleContextLost);
+    renderer.domElement.addEventListener("webglcontextlost", handleContextLost);
 
     const scene = new THREE.Scene();
-    const fog = new THREE.FogExp2('#95adc2', 0.0036);
+    const fog = new THREE.FogExp2("#95adc2", 0.0036);
     scene.fog = fog;
 
     // Studio Reflection Environment + Procedural Sky Dome
@@ -436,25 +442,22 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     const skyDome = createProceduralSkyDome();
     scene.add(skyDome.mesh);
 
-    const matLib = createProceduralMaterialLibrary(
-      renderer.capabilities.getMaxAnisotropy()
-    );
+    const matLib = createProceduralMaterialLibrary(renderer.capabilities.getMaxAnisotropy());
 
     const camera = new THREE.PerspectiveCamera(
       DEFAULT_CAMERA_RIG_CONFIG.fovThirdPerson,
-      (container.clientWidth || window.innerWidth) /
-        (container.clientHeight || window.innerHeight),
+      (container.clientWidth || window.innerWidth) / (container.clientHeight || window.innerHeight),
       0.08,
-      500
+      500,
     );
     scene.add(camera);
 
     // 2. Dynamic Atmospheric Lighting Rig + Muzzle Flash PointLight
-    const hemiLight = new THREE.HemisphereLight('#b9d6f2', '#3a4635', 0.88);
+    const hemiLight = new THREE.HemisphereLight("#b9d6f2", "#3a4635", 0.88);
     hemiLight.position.set(0, 90, 0);
     scene.add(hemiLight);
 
-    const sunLight = new THREE.DirectionalLight('#fff3db', 2.35);
+    const sunLight = new THREE.DirectionalLight("#fff3db", 2.35);
     sunLight.position.set(75, 105, 48);
     sunLight.castShadow = !isSoftwareGl;
     sunLight.shadow.mapSize.width = 2048;
@@ -471,11 +474,11 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     scene.add(sunLight);
     scene.add(sunLight.target);
 
-    const rimLight = new THREE.DirectionalLight('#93c5fd', 0.52);
+    const rimLight = new THREE.DirectionalLight("#93c5fd", 0.52);
     rimLight.position.set(-75, 50, -65);
     scene.add(rimLight);
 
-    const muzzlePointLight = new THREE.PointLight('#fbbf24', 0, 14, 2);
+    const muzzlePointLight = new THREE.PointLight("#fbbf24", 0, 14, 2);
     scene.add(muzzlePointLight);
 
     let appliedAtmosphere: AtmospherePreset | null = null;
@@ -519,7 +522,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     const beaconGeo = new THREE.CylinderGeometry(0.14, 0.14, 26, 8);
     beaconGeo.translate(0, 13, 0);
     const beaconMat = new THREE.MeshBasicMaterial({
-      color: '#f59e0b',
+      color: "#f59e0b",
       transparent: true,
       opacity: 0.38,
       depthWrite: false,
@@ -530,7 +533,12 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
 
     const ringGeo = new THREE.RingGeometry(1.2, 1.5, 28);
     ringGeo.rotateX(-Math.PI / 2);
-    const ringMat = new THREE.MeshBasicMaterial({ color: '#38bdf8', side: THREE.DoubleSide, transparent: true, opacity: 0.85 });
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: "#38bdf8",
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.85,
+    });
     const actionRing = new THREE.Mesh(ringGeo, ringMat);
     actionRing.visible = false;
     scene.add(actionRing);
@@ -538,12 +546,12 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     const bombGroup = new THREE.Group();
     const bombBody = new THREE.Mesh(
       new THREE.BoxGeometry(0.7, 0.45, 0.45),
-      new THREE.MeshStandardMaterial({ color: '#3b3f2e', roughness: 0.8 })
+      new THREE.MeshStandardMaterial({ color: "#3b3f2e", roughness: 0.8 }),
     );
     bombBody.position.y = 0.23;
     const bombLight = new THREE.Mesh(
       new THREE.SphereGeometry(0.07, 8, 8),
-      new THREE.MeshBasicMaterial({ color: '#ef4444' })
+      new THREE.MeshBasicMaterial({ color: "#ef4444" }),
     );
     bombLight.position.set(0.2, 0.5, 0);
     bombGroup.add(bombBody, bombLight);
@@ -553,13 +561,13 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     // 5. Build All Faction-Dependent Actors (Player, 1st-Person Rig, Squad APC, Squad Riflemen, Enemy Convoy Column & Patrols)
     let currentBuiltFaction = factionRef.current;
     let playerRig: OperatorRigRefs = buildOperatorModel(currentBuiltFaction, false);
-    const safehouse = cityLayout.byId.get('safehouse')!;
+    const safehouse = cityLayout.byId.get("safehouse")!;
     const safeEntrance = getBuildingEntrance(safehouse);
     const safeRespawn = {
       x: (safehouse.rooms[0].minX + safehouse.rooms[0].maxX) / 2,
       z: (safehouse.rooms[0].minZ + safehouse.rooms[0].maxZ) / 2,
     };
-    _playerPos.set(safeEntrance.x, 0, safeEntrance.z + (safehouse.doorSide === 'N' ? -2 : 2));
+    _playerPos.set(safeEntrance.x, 0, safeEntrance.z + (safehouse.doorSide === "N" ? -2 : 2));
     playerRig.root.position.copy(_playerPos);
     scene.add(playerRig.root);
 
@@ -569,17 +577,21 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     const shadowDisc = new THREE.Mesh(
       new THREE.CircleGeometry(0.62, 18),
       new THREE.MeshBasicMaterial({
-        color: '#000000',
+        color: "#000000",
         transparent: true,
         opacity: 0.36,
         depthWrite: false,
-      })
+      }),
     );
     shadowDisc.rotation.x = -Math.PI / 2;
     scene.add(shadowDisc);
 
     let squadVehicle: CommandVehicleRefs = buildSquadCommandVehicle(currentBuiltFaction, matLib);
-    const vehPos = new THREE.Vector3(safeEntrance.x + 6, 0, safeEntrance.z + (safehouse.doorSide === 'N' ? -6 : 6));
+    const vehPos = new THREE.Vector3(
+      safeEntrance.x + 6,
+      0,
+      safeEntrance.z + (safehouse.doorSide === "N" ? -6 : 6),
+    );
     staticPhysics.resolveHorizontalBody(vehPos, vehPos.y, 2.8, 1.85);
     vehPos.y = sampleWalkableHeight(vehPos.x, vehPos.z);
     squadVehicle.root.position.copy(vehPos);
@@ -688,7 +700,8 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     };
 
     // Street patrols hold intersections and respawn slowly once you are out of sight.
-    const streetSlots: Array<{ x: number; z: number; enemy: EnemyActor | null; respawn: number }> = [];
+    const streetSlots: Array<{ x: number; z: number; enemy: EnemyActor | null; respawn: number }> =
+      [];
     for (let i = 1; i < BLOCKS_PER_SIDE; i += 2) {
       for (let j = 0; j < BLOCKS_PER_SIDE; j++) {
         const x = blockCenter(i) - 26;
@@ -707,7 +720,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       actors: EnemyActor[];
     }
     const d = {
-      key: '',
+      key: "",
       step: null as MissionStep | null,
       building: null as Building | null,
       floors: [] as FloorRuntime[],
@@ -727,7 +740,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
 
     const despawnMissionEnemies = () => {
       for (let i = enemies.length - 1; i >= 0; i--) {
-        if (enemies[i].kind !== 'STREET') despawnEnemy(enemies[i]);
+        if (enemies[i].kind !== "STREET") despawnEnemy(enemies[i]);
       }
     };
 
@@ -752,7 +765,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       bombGroup.visible = false;
       if (!step) return;
       const b = d.building;
-      if (step.type === 'CLEAR_BUILDING' && b) {
+      if (step.type === "CLEAR_BUILDING" && b) {
         for (let f = 0; f < b.floors; f++) {
           const cleared = p.clearedFloors.includes(f);
           d.floors.push({
@@ -763,14 +776,14 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           });
         }
       }
-      if (step.type === 'DETONATE' && b) {
+      if (step.type === "DETONATE" && b) {
         const mission = getCurrentMission(p);
         const plantStep = mission?.steps[p.stepIndex - 1];
         const spot = getActionSpot(b);
         bombGroup.position.set(spot.x, floorY(plantStep?.floor ?? 0), spot.z);
         bombGroup.visible = true;
       }
-      if (step.type === 'DESTROY_CONVOY') {
+      if (step.type === "DESTROY_CONVOY") {
         convoyHp = CONVOY_MAX_HP;
         convoyX = -130;
         convoyDestroyedCooldown = 0;
@@ -785,20 +798,20 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     };
 
     const onEnemyKilled = (e: EnemyActor) => {
-      if (e.kind === 'FLOOR') {
+      if (e.kind === "FLOOR") {
         const fr = d.floors[e.floor];
         if (fr) {
           fr.remaining = Math.max(0, fr.remaining - 1);
           fr.actors = fr.actors.filter((a) => a !== e);
         }
-      } else if (e.kind === 'GUARD') {
+      } else if (e.kind === "GUARD") {
         d.guardsRemaining = Math.max(0, d.guardsRemaining - 1);
         d.guardActors = d.guardActors.filter((a) => a !== e);
-      } else if (e.kind === 'HVT') {
+      } else if (e.kind === "HVT") {
         d.hvtDown = true;
         d.hvt = null;
-        callbacksRef.current.onToast(`${d.step?.targetName ?? 'Target'} eliminated`);
-      } else if (e.kind === 'STREET') {
+        callbacksRef.current.onToast(`${d.step?.targetName ?? "Target"} eliminated`);
+      } else if (e.kind === "STREET") {
         const slot = streetSlotOf.get(e);
         if (slot !== undefined) {
           streetSlots[slot].enemy = null;
@@ -835,7 +848,14 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         state: () => ({
           player: { x: _playerPos.x, y: _playerPos.y, z: _playerPos.z },
           hp: combatRef.current.hp,
-          enemies: enemies.filter((e) => e.alive).map((e) => ({ kind: e.kind, x: e.rig.root.position.x, y: e.rig.root.position.y, z: e.rig.root.position.z })),
+          enemies: enemies
+            .filter((e) => e.alive)
+            .map((e) => ({
+              kind: e.kind,
+              x: e.rig.root.position.x,
+              y: e.rig.root.position.y,
+              z: e.rig.root.position.z,
+            })),
           hud: { ...directorHud },
           music: musicEngine.getStatus(),
         }),
@@ -845,7 +865,8 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           if (convoyHp > 0) destroyConvoy();
         },
         killNear: (radius = 25) => {
-          for (const e of enemies) if (e.alive && e.rig.root.position.distanceTo(_playerPos) < radius) killEnemy(e);
+          for (const e of enemies)
+            if (e.alive && e.rig.root.position.distanceTo(_playerPos) < radius) killEnemy(e);
         },
       };
     }
@@ -853,27 +874,32 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     const wavePoints = (cx: number, cz: number): Array<{ x: number; z: number }> => {
       const pts: Array<{ x: number; z: number }> = [];
       for (const t of [-48, -24, 24, 48]) {
-        pts.push({ x: cx - 27, z: cz + t }, { x: cx + 27, z: cz + t }, { x: cx + t, z: cz - 27 }, { x: cx + t, z: cz + 27 });
+        pts.push(
+          { x: cx - 27, z: cz + t },
+          { x: cx + 27, z: cz + t },
+          { x: cx + t, z: cz - 27 },
+          { x: cx + t, z: cz + 27 },
+        );
       }
       return pts;
     };
 
     const LOOT_LABEL: Record<string, string> = {
-      AMMO: 'the ammo crate',
-      MEDKIT: 'the medical case',
-      SALVAGE: 'the salvage box',
-      ARMOR: 'the armor locker',
-      DOSSIER: 'the document case',
+      AMMO: "the ammo crate",
+      MEDKIT: "the medical case",
+      SALVAGE: "the salvage box",
+      ARMOR: "the armor locker",
+      DOSSIER: "the document case",
     };
 
     let directorPrompt: string | null = null;
     let directorWaypoint: { x: number; y: number; z: number } | null = null;
     const directorHud: MissionHudState = {
-      missionLabel: '',
-      stepText: '',
-      detail: '',
+      missionLabel: "",
+      stepText: "",
+      detail: "",
       progress: null,
-      locationLabel: '',
+      locationLabel: "",
     };
 
     const updateDirector = (
@@ -881,7 +907,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       playerBuilding: Building | null,
       playerFloor: number,
       interactHeld: boolean,
-      detonatePressed: boolean
+      detonatePressed: boolean,
     ) => {
       const p = campaignRef.current;
       const key = `${p.missionIndex}:${p.stepIndex}:${d.deathNonce}:${enemyFaction}`;
@@ -894,9 +920,11 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       actionRing.visible = false;
       const mission = getCurrentMission(p);
       const step = d.step;
-      directorHud.missionLabel = mission ? `Mission ${mission.number} · ${mission.title}` : 'Campaign complete';
-      directorHud.stepText = step ? step.text : 'Varos-Meridian is free. Explore and loot at will.';
-      directorHud.detail = '';
+      directorHud.missionLabel = mission
+        ? `Mission ${mission.number} · ${mission.title}`
+        : "Campaign complete";
+      directorHud.stepText = step ? step.text : "Varos-Meridian is free. Explore and loot at will.";
+      directorHud.detail = "";
       directorHud.progress = null;
       if (!step || d.completeSent) {
         d.tookDamage = false;
@@ -906,14 +934,17 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       const px = _playerPos.x;
       const pz = _playerPos.z;
       const bCenter = b
-        ? { x: (b.footprint.minX + b.footprint.maxX) / 2, z: (b.footprint.minZ + b.footprint.maxZ) / 2 }
+        ? {
+            x: (b.footprint.minX + b.footprint.maxX) / 2,
+            z: (b.footprint.minZ + b.footprint.maxZ) / 2,
+          }
         : null;
       const distToB = bCenter ? Math.hypot(bCenter.x - px, bCenter.z - pz) : Infinity;
       const inB = !!b && playerBuilding === b;
 
       switch (step.type) {
-        case 'TRAVEL':
-        case 'RETURN_SAFEHOUSE': {
+        case "TRAVEL":
+        case "RETURN_SAFEHOUSE": {
           const wp = getStepWaypoint(step);
           if (wp) {
             directorWaypoint = wp;
@@ -924,7 +955,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           }
           break;
         }
-        case 'CLEAR_BUILDING': {
+        case "CLEAR_BUILDING": {
           if (!b) break;
           const near = distToB < 75;
           const active = new Set<number>();
@@ -942,7 +973,16 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
             if (active.has(f) && fr.actors.length === 0 && fr.remaining > 0) {
               const posts = getFloorPosts(b, f, fr.remaining);
               for (const post of posts) {
-                fr.actors.push(spawnEnemy({ kind: 'FLOOR', x: post.x, z: post.z, y: floorY(f), bounds: post.room, floor: f }));
+                fr.actors.push(
+                  spawnEnemy({
+                    kind: "FLOOR",
+                    x: post.x,
+                    z: post.z,
+                    y: floorY(f),
+                    bounds: post.room,
+                    floor: f,
+                  }),
+                );
               }
             } else if (!active.has(f) && fr.actors.length > 0) {
               fr.actors.forEach((a) => despawnEnemy(a));
@@ -956,7 +996,9 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
               fr.cleared = true;
               callbacksRef.current.onFloorCleared(f);
               const n = d.floors.filter((x) => x.cleared).length;
-              callbacksRef.current.onToast(`Floor ${f + 1} clear — ${n}/${d.floors.length} floors secured`);
+              callbacksRef.current.onToast(
+                `Floor ${f + 1} clear — ${n}/${d.floors.length} floors secured`,
+              );
             }
             if (fr.cleared) clearedCount++;
           });
@@ -964,7 +1006,9 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           const here = inB ? d.floors[playerFloor] : null;
           directorHud.detail =
             `Floors cleared ${clearedCount}/${d.floors.length}` +
-            (here ? ` · This floor: ${here.remaining > 0 ? `${here.remaining} hostiles` : 'clear'}` : '');
+            (here
+              ? ` · This floor: ${here.remaining > 0 ? `${here.remaining} hostiles` : "clear"}`
+              : "");
           if (clearedCount >= d.floors.length) {
             callbacksRef.current.onToast(`${b.name} taken`);
             completeStep();
@@ -972,34 +1016,43 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           }
           const nextFloor = d.floors.findIndex((fr) => !fr.cleared);
           if (inB) {
-            directorWaypoint = bCenter ? { x: bCenter.x, z: bCenter.z, y: floorY(Math.max(0, nextFloor)) } : null;
+            directorWaypoint = bCenter
+              ? { x: bCenter.x, z: bCenter.z, y: floorY(Math.max(0, nextFloor)) }
+              : null;
           } else {
             const e = getBuildingEntrance(b);
             directorWaypoint = { x: e.x, z: e.z, y: 0 };
           }
           break;
         }
-        case 'PLANT_BOMB':
-        case 'RETRIEVE':
-        case 'ELIMINATE': {
+        case "PLANT_BOMB":
+        case "RETRIEVE":
+        case "ELIMINATE": {
           if (!b) break;
           const F = step.floor ?? 0;
           if (distToB < 75 && !d.guardsSpawned && d.guardsRemaining > 0) {
             d.guardsSpawned = true;
             const posts = getFloorPosts(b, F, d.guardsRemaining);
             d.guardActors = posts.map((post) =>
-              spawnEnemy({ kind: 'GUARD', x: post.x, z: post.z, y: floorY(F), bounds: post.room, floor: F })
+              spawnEnemy({
+                kind: "GUARD",
+                x: post.x,
+                z: post.z,
+                y: floorY(F),
+                bounds: post.room,
+                floor: F,
+              }),
             );
           } else if (distToB > 115 && d.guardsSpawned) {
             d.guardActors.forEach((a) => despawnEnemy(a));
             d.guardActors = [];
             d.guardsSpawned = false;
           }
-          if (step.type === 'ELIMINATE') {
+          if (step.type === "ELIMINATE") {
             if (distToB < 75 && !d.hvt && !d.hvtDown) {
               const room = b.rooms[b.rooms.length - 1];
               d.hvt = spawnEnemy({
-                kind: 'HVT',
+                kind: "HVT",
                 x: (room.minX + room.maxX) / 2,
                 z: (room.minZ + room.maxZ) / 2,
                 y: floorY(F),
@@ -1018,9 +1071,13 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
               break;
             }
             const hpPct = d.hvt ? Math.round((d.hvt.hp / d.hvt.maxHp) * 100) : 100;
-            directorHud.detail = `${step.targetName ?? 'Target'} · Floor ${F + 1} · ${hpPct}% health${d.guardsRemaining > 0 ? ` · ${d.guardsRemaining} bodyguards` : ''}`;
+            directorHud.detail = `${step.targetName ?? "Target"} · Floor ${F + 1} · ${hpPct}% health${d.guardsRemaining > 0 ? ` · ${d.guardsRemaining} bodyguards` : ""}`;
             directorWaypoint = d.hvt
-              ? { x: d.hvt.rig.root.position.x, y: d.hvt.rig.root.position.y, z: d.hvt.rig.root.position.z }
+              ? {
+                  x: d.hvt.rig.root.position.x,
+                  y: d.hvt.rig.root.position.y,
+                  z: d.hvt.rig.root.position.z,
+                }
               : bCenter
                 ? { x: bCenter.x, z: bCenter.z, y: floorY(F) }
                 : null;
@@ -1029,22 +1086,24 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           const spot = getActionSpot(b);
           actionRing.visible = true;
           actionRing.position.set(spot.x, floorY(F) + 0.04, spot.z);
-          directorWaypoint = inB ? { x: spot.x, y: floorY(F), z: spot.z } : { ...getBuildingEntrance(b), y: 0 };
+          directorWaypoint = inB
+            ? { x: spot.x, y: floorY(F), z: spot.z }
+            : { ...getBuildingEntrance(b), y: 0 };
           const onFloor = inB && playerFloor === F;
           const distSpot = Math.hypot(spot.x - px, spot.z - pz);
           const holdSec = step.holdSec ?? 8;
-          const verb = step.type === 'PLANT_BOMB' ? 'plant the charge' : 'work';
+          const verb = step.type === "PLANT_BOMB" ? "plant the charge" : "work";
           if (onFloor && distSpot < 2.4) {
             if (!canStartHoldAction(d.guardsRemaining)) {
-              directorPrompt = `Clear the ${d.guardsRemaining} guard${d.guardsRemaining === 1 ? '' : 's'} on this floor first`;
+              directorPrompt = `Clear the ${d.guardsRemaining} guard${d.guardsRemaining === 1 ? "" : "s"} on this floor first`;
             } else {
               d.hold = stepHoldProgress(d.hold, dt, interactHeld, d.tookDamage);
               directorPrompt = `Hold [E] to ${verb} — ${Math.min(100, Math.round((d.hold / holdSec) * 100))}%`;
               if (d.hold >= holdSec) {
-                if (step.type === 'PLANT_BOMB') {
+                if (step.type === "PLANT_BOMB") {
                   bombGroup.position.set(spot.x, floorY(F), spot.z);
                   bombGroup.visible = true;
-                  callbacksRef.current.onToast('Charge planted. Get clear!');
+                  callbacksRef.current.onToast("Charge planted. Get clear!");
                 }
                 completeStep();
               }
@@ -1053,19 +1112,23 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
             d.hold = stepHoldProgress(d.hold, dt, false, d.tookDamage);
           }
           directorHud.progress = d.hold > 0 ? Math.min(1, d.hold / holdSec) : null;
-          directorHud.detail = `Floor ${F + 1}${d.guardsRemaining > 0 ? ` · ${d.guardsRemaining} guards remain` : ' · guards down'}${
-            !onFloor && inB ? ` · you are on floor ${playerFloor + 1}` : ''
+          directorHud.detail = `Floor ${F + 1}${d.guardsRemaining > 0 ? ` · ${d.guardsRemaining} guards remain` : " · guards down"}${
+            !onFloor && inB ? ` · you are on floor ${playerFloor + 1}` : ""
           }`;
           break;
         }
-        case 'DETONATE': {
+        case "DETONATE": {
           if (!b) break;
           const dist = Math.hypot(bombGroup.position.x - px, bombGroup.position.z - pz);
           const safe = step.safeDistance ?? 50;
-          directorWaypoint = { x: bombGroup.position.x, y: bombGroup.position.y, z: bombGroup.position.z };
+          directorWaypoint = {
+            x: bombGroup.position.x,
+            y: bombGroup.position.y,
+            z: bombGroup.position.z,
+          };
           bombLight.visible = Math.floor(simTime * 3) % 2 === 0;
           if (canDetonate(dist, safe)) {
-            directorPrompt = 'Press [G] to detonate';
+            directorPrompt = "Press [G] to detonate";
             directorHud.detail = `${Math.round(dist)} m from the charge — safe`;
             if (detonatePressed) {
               audioEngine.playExplosion();
@@ -1076,7 +1139,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                 _tmpVecC.set(
                   fp.minX + Math.random() * (fp.maxX - fp.minX),
                   Math.random() * floorY(b.floors),
-                  fp.minZ + Math.random() * (fp.maxZ - fp.minZ)
+                  fp.minZ + Math.random() * (fp.maxZ - fp.minZ),
                 );
                 spawnImpactSparks(_tmpVecC, 14, true);
               }
@@ -1092,42 +1155,60 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           }
           break;
         }
-        case 'DEFEND': {
+        case "DEFEND": {
           const z = step.zone;
           if (!z) break;
           const dist = Math.hypot(z.x - px, z.z - pz);
           const inside = dist < z.radius;
           d.defendElapsed = stepDefendTimer(d.defendElapsed, dt, inside);
           d.waveTimer -= dt;
-          const waveAlive = enemies.filter((e) => e.kind === 'WAVE' && e.alive).length;
+          const waveAlive = enemies.filter((e) => e.kind === "WAVE" && e.alive).length;
           if (d.waveTimer <= 0) {
             d.waveTimer = 13;
             if (waveAlive < 10) {
-              const pts = wavePoints(z.x, z.z).filter((pt) => Math.hypot(pt.x - px, pt.z - pz) > 26);
+              const pts = wavePoints(z.x, z.z).filter(
+                (pt) => Math.hypot(pt.x - px, pt.z - pz) > 26,
+              );
               for (let k = 0; k < 3 && pts.length > 0; k++) {
                 const pt = pts.splice(Math.floor(Math.random() * pts.length), 1)[0];
-                spawnEnemy({ kind: 'WAVE', x: pt.x, z: pt.z, y: 0, bounds: null, floor: 0, chase: true });
+                spawnEnemy({
+                  kind: "WAVE",
+                  x: pt.x,
+                  z: pt.z,
+                  y: 0,
+                  bounds: null,
+                  floor: 0,
+                  chase: true,
+                });
               }
             }
           }
           const total = step.durationSec ?? 120;
           directorHud.progress = Math.min(1, d.defendElapsed / total);
-          directorHud.detail = `Hold for ${Math.max(0, Math.ceil(total - d.defendElapsed))} s${inside ? '' : ' · back inside the plaza — clock paused'}`;
+          directorHud.detail = `Hold for ${Math.max(0, Math.ceil(total - d.defendElapsed))} s${inside ? "" : " · back inside the plaza — clock paused"}`;
           directorWaypoint = { x: z.x, y: 0, z: z.z };
           if (d.defendElapsed >= total) {
             for (let i = enemies.length - 1; i >= 0; i--) {
-              if (enemies[i].kind === 'WAVE') despawnEnemy(enemies[i]);
+              if (enemies[i].kind === "WAVE") despawnEnemy(enemies[i]);
             }
             completeStep();
           }
           break;
         }
-        case 'DESTROY_CONVOY': {
+        case "DESTROY_CONVOY": {
           const cz = getHighwayCenterZ(convoyX);
           if (!d.escortsSpawned && convoyHp > 0 && Math.hypot(convoyX - px, cz - pz) < 70) {
             d.escortsSpawned = true;
             for (let k = 0; k < 4; k++) {
-              spawnEnemy({ kind: 'WAVE', x: convoyX - 8 + k * 5, z: cz - 6.5, y: 0, bounds: null, floor: 0, chase: true });
+              spawnEnemy({
+                kind: "WAVE",
+                x: convoyX - 8 + k * 5,
+                z: cz - 6.5,
+                y: 0,
+                bounds: null,
+                floor: 0,
+                chase: true,
+              });
             }
           }
           if (convoyKillPending) {
@@ -1136,7 +1217,10 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
             break;
           }
           directorHud.progress = convoyHp > 0 ? 1 - convoyHp / CONVOY_MAX_HP : null;
-          directorHud.detail = convoyHp > 0 ? `Convoy armor ${Math.round((convoyHp / CONVOY_MAX_HP) * 100)}%` : 'Convoy regrouping…';
+          directorHud.detail =
+            convoyHp > 0
+              ? `Convoy armor ${Math.round((convoyHp / CONVOY_MAX_HP) * 100)}%`
+              : "Convoy regrouping…";
           directorWaypoint = { x: convoyX, y: 0, z: cz };
           break;
         }
@@ -1154,17 +1238,16 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         depthZ: 1.05,
         minY: cy - 0.5,
         maxY: cy + 0.92,
-        material: 'STEEL',
+        material: "STEEL",
         walkableTop: true,
       });
     };
-
 
     // 6. Dual-Ray Ballistic Convergence Visualizer Lines & Impact Particle Pool
     const sightRayGeo = new THREE.BufferGeometry().setFromPoints(_sightLinePts);
     const sightRayLine = new THREE.Line(
       sightRayGeo,
-      new THREE.LineBasicMaterial({ color: '#38bdf8', transparent: true, opacity: 0.85 })
+      new THREE.LineBasicMaterial({ color: "#38bdf8", transparent: true, opacity: 0.85 }),
     );
     sightRayLine.frustumCulled = false;
     sightRayLine.visible = false;
@@ -1172,14 +1255,14 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     const muzzleRayGeo = new THREE.BufferGeometry().setFromPoints(_muzzleLinePts);
     const muzzleRayLine = new THREE.Line(
       muzzleRayGeo,
-      new THREE.LineBasicMaterial({ color: '#f59e0b', transparent: true, opacity: 0.95 })
+      new THREE.LineBasicMaterial({ color: "#f59e0b", transparent: true, opacity: 0.95 }),
     );
     muzzleRayLine.frustumCulled = false;
     muzzleRayLine.visible = false;
 
     const focalSphere = new THREE.Mesh(
       new THREE.SphereGeometry(0.16, 12, 12),
-      new THREE.MeshBasicMaterial({ color: '#ef4444' })
+      new THREE.MeshBasicMaterial({ color: "#ef4444" }),
     );
     focalSphere.visible = false;
     scene.add(sightRayLine, muzzleRayLine, focalSphere);
@@ -1187,23 +1270,23 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     const tracers: TracerBolt[] = [];
     const tracerGeo = new THREE.CylinderGeometry(0.026, 0.026, 1.45, 6);
     tracerGeo.rotateX(Math.PI / 2);
-    const friendlyTracerMat = new THREE.MeshBasicMaterial({ color: '#fde047' });
-    const enemyTracerMat = new THREE.MeshBasicMaterial({ color: '#f87171' });
+    const friendlyTracerMat = new THREE.MeshBasicMaterial({ color: "#fde047" });
+    const enemyTracerMat = new THREE.MeshBasicMaterial({ color: "#f87171" });
 
     const impactBursts: ImpactBurst[] = [];
     const sparkGeo = new THREE.SphereGeometry(0.14, 8, 8);
     const sparkMat = new THREE.MeshBasicMaterial({
-      color: '#fbbf24',
+      color: "#fbbf24",
       transparent: true,
       opacity: 0.9,
     });
     const fireballMat = new THREE.MeshBasicMaterial({
-      color: '#f97316',
+      color: "#f97316",
       transparent: true,
       opacity: 0.88,
     });
     const smokeMat = new THREE.MeshBasicMaterial({
-      color: '#334155',
+      color: "#334155",
       transparent: true,
       opacity: 0.65,
     });
@@ -1220,7 +1303,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           velocity: new THREE.Vector3(
             (Math.random() - 0.5) * (isExplosion ? 16 : 9),
             Math.random() * (isExplosion ? 14 : 6) + 1.5,
-            (Math.random() - 0.5) * (isExplosion ? 16 : 9)
+            (Math.random() - 0.5) * (isExplosion ? 16 : 9),
           ),
           life: isExplosion ? 0.95 : 0.24,
           maxLife: isExplosion ? 0.95 : 0.24,
@@ -1233,7 +1316,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       origin: THREE.Vector3,
       dir: THREE.Vector3,
       isFriendly: boolean,
-      damage: number
+      damage: number,
     ) => {
       const mesh = new THREE.Mesh(tracerGeo, isFriendly ? friendlyTracerMat : enemyTracerMat);
       mesh.position.copy(origin);
@@ -1278,14 +1361,14 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       convoyTruckMesh.visible = false;
       convoyRearEscort.root.visible = false;
       convoyDestroyedCooldown = 24.0;
-  
+
       const dropCrateMesh = buildSalvageTechCrate();
       const dropPos = { x: convoyX, z: getHighwayCenterZ(convoyX) };
       staticPhysics.resolveHorizontalBody(
         dropPos,
         sampleWalkableHeight(dropPos.x, dropPos.z),
         1.0,
-        0.9
+        0.9,
       );
       const dropY = sampleWalkableHeight(dropPos.x, dropPos.z);
       dropCrateMesh.position.set(dropPos.x, dropY, dropPos.z);
@@ -1297,9 +1380,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         mesh: dropCrateMesh,
         collected: false,
       });
-      setConvoyStatusText(
-        'Convoy destroyed — salvage crate dropped on Grand Avenue (press E)'
-      );
+      setConvoyStatusText("Convoy destroyed — salvage crate dropped on Grand Avenue (press E)");
     };
 
     let processedDeployNonce = deployReqRef.current?.nonce ?? 0;
@@ -1308,7 +1389,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     const onKeyDown = (e: KeyboardEvent) => {
       if (
         document.activeElement &&
-        ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)
+        ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)
       ) {
         return;
       }
@@ -1317,31 +1398,31 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       keysDown[e.code] = true;
 
       if (!e.repeat) {
-        if (e.code === 'KeyC') {
+        if (e.code === "KeyC") {
           const nextMode = camControllerRef.current.togglePerspectiveMode();
           audioEngine.playPovToggle(nextMode === PerspectiveMode.THIRD_PERSON);
-        } else if (e.code === 'KeyQ') {
+        } else if (e.code === "KeyQ") {
           camControllerRef.current.swapShoulder();
-        } else if (e.code === 'KeyR') {
+        } else if (e.code === "KeyR") {
           reloadJustPressed = true;
-        } else if (e.code === 'Digit2' || e.code === 'Digit1') {
+        } else if (e.code === "Digit2" || e.code === "Digit1") {
           switchSlotJustPressed = true;
-        } else if (e.code === 'KeyV') {
+        } else if (e.code === "KeyV") {
           quickMeleeJustPressed = true;
-        } else if (e.code === 'Digit4') {
+        } else if (e.code === "Digit4") {
           healJustPressed = true;
-        } else if (e.code === 'KeyE') {
+        } else if (e.code === "KeyE") {
           interactJustPressed = true;
-        } else if (e.code === 'KeyG') {
+        } else if (e.code === "KeyG") {
           detonateJustPressed = true;
-        } else if (e.code === 'KeyF') {
+        } else if (e.code === "KeyF") {
           handleCycleSquadOrder();
-        } else if (e.code === 'KeyH') {
+        } else if (e.code === "KeyH") {
           setDockCollapsed((prev) => !prev);
-        } else if (e.code === 'KeyZ') {
+        } else if (e.code === "KeyZ") {
           camControllerRef.current.isAimingDownSights =
             !camControllerRef.current.isAimingDownSights;
-        } else if (e.code === 'KeyJ') {
+        } else if (e.code === "KeyJ") {
           triggerHeld = true;
           triggerJustPressed = true;
         }
@@ -1350,7 +1431,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
 
     const onKeyUp = (e: KeyboardEvent) => {
       keysDown[e.code] = false;
-      if (e.code === 'KeyJ') triggerHeld = false;
+      if (e.code === "KeyJ") triggerHeld = false;
     };
 
     const onMouseDown = (e: MouseEvent) => {
@@ -1416,14 +1497,14 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       }
     };
 
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    window.addEventListener('mousedown', onMouseDown);
-    window.addEventListener('mouseup', onMouseUp);
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('contextmenu', onContextMenu);
-    document.addEventListener('pointerlockchange', onPointerLockChange);
-    window.addEventListener('resize', onResize);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("contextmenu", onContextMenu);
+    document.addEventListener("pointerlockchange", onPointerLockChange);
+    window.addEventListener("resize", onResize);
 
     // 8. Main Deterministic Game Loop
     const clock = new THREE.Clock();
@@ -1482,13 +1563,14 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       const tCmd = testerCmdRef.current;
       if (tCmd && tCmd.nonce !== processedTesterNonce) {
         processedTesterNonce = tCmd.nonce;
-        if (tCmd.type === 'KILL_NEAR') {
-          for (const e of enemies) if (e.alive && e.rig.root.position.distanceTo(_playerPos) < 40) killEnemy(e);
-        } else if (tCmd.type === 'KILL_MISSION') {
-          for (const e of enemies) if (e.alive && e.kind !== 'STREET') killEnemy(e);
-        } else if (tCmd.type === 'DESTROY_CONVOY') {
+        if (tCmd.type === "KILL_NEAR") {
+          for (const e of enemies)
+            if (e.alive && e.rig.root.position.distanceTo(_playerPos) < 40) killEnemy(e);
+        } else if (tCmd.type === "KILL_MISSION") {
+          for (const e of enemies) if (e.alive && e.kind !== "STREET") killEnemy(e);
+        } else if (tCmd.type === "DESTROY_CONVOY") {
           if (convoyHp > 0) destroyConvoy();
-        } else if (tCmd.type === 'HEAL') {
+        } else if (tCmd.type === "HEAL") {
           const c = combatRef.current;
           combatRef.current = {
             ...c,
@@ -1505,8 +1587,16 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       if (deployReqRef.current && deployReqRef.current.nonce !== processedDeployNonce) {
         processedDeployNonce = deployReqRef.current.nonce;
         const pDep = {
-          x: THREE.MathUtils.clamp(deployReqRef.current.x, -PLAYABLE_HALF_EXTENT, PLAYABLE_HALF_EXTENT),
-          z: THREE.MathUtils.clamp(deployReqRef.current.z, -PLAYABLE_HALF_EXTENT, PLAYABLE_HALF_EXTENT),
+          x: THREE.MathUtils.clamp(
+            deployReqRef.current.x,
+            -PLAYABLE_HALF_EXTENT,
+            PLAYABLE_HALF_EXTENT,
+          ),
+          z: THREE.MathUtils.clamp(
+            deployReqRef.current.z,
+            -PLAYABLE_HALF_EXTENT,
+            PLAYABLE_HALF_EXTENT,
+          ),
         };
         const depY = sampleCitySupport(pDep.x, pDep.z, deployReqRef.current.y ?? 0);
         staticPhysics.resolveHorizontalBody(pDep, depY, 1.75, 0.55);
@@ -1514,12 +1604,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         verticalVel = 0;
 
         const vDep = { x: pDep.x - 7, z: pDep.z - 5 };
-        staticPhysics.resolveHorizontalBody(
-          vDep,
-          sampleWalkableHeight(vDep.x, vDep.z),
-          2.8,
-          1.9
-        );
+        staticPhysics.resolveHorizontalBody(vDep, sampleWalkableHeight(vDep.x, vDep.z), 2.8, 1.9);
         squadVehicle.root.position.set(vDep.x, sampleWalkableHeight(vDep.x, vDep.z), vDep.z);
       }
 
@@ -1535,7 +1620,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
             const idx = collidableEnvironment.indexOf(m);
             if (idx !== -1) collidableEnvironment.splice(idx, 1);
             scene.remove(m);
-          }
+          },
         );
 
         playerRig = buildOperatorModel(currentBuiltFaction, false);
@@ -1558,17 +1643,13 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           slot.respawn = 0;
         });
         streetSlotOf.clear();
-        d.key = '';
+        d.key = "";
 
         convoyLeadEscort = buildSquadCommandVehicle(enemyFaction, matLib);
         convoyTruckMesh = buildConvoySupplyTruck(enemyFaction);
         convoyRearEscort = buildSquadCommandVehicle(enemyFaction, matLib);
         scene.add(convoyLeadEscort.root, convoyTruckMesh, convoyRearEscort.root);
-        collidableEnvironment.push(
-          convoyLeadEscort.root,
-          convoyTruckMesh,
-          convoyRearEscort.root
-        );
+        collidableEnvironment.push(convoyLeadEscort.root, convoyTruckMesh, convoyRearEscort.root);
       }
 
       // Sync Squad Command Vehicle visual retrofit modules
@@ -1578,10 +1659,12 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       squadVehicle.atgmGroup.visible = vehicleRef.current.hasRemoteTurret;
 
       if (!simPausedRef.current) {
-        if (keysDown['ArrowLeft']) camControllerRef.current.applyLookDelta(-18 * dt * 60, 0, 0.0016);
-        if (keysDown['ArrowRight']) camControllerRef.current.applyLookDelta(18 * dt * 60, 0, 0.0016);
-        if (keysDown['ArrowUp']) camControllerRef.current.applyLookDelta(0, -14 * dt * 60, 0.0016);
-        if (keysDown['ArrowDown']) camControllerRef.current.applyLookDelta(0, 14 * dt * 60, 0.0016);
+        if (keysDown["ArrowLeft"])
+          camControllerRef.current.applyLookDelta(-18 * dt * 60, 0, 0.0016);
+        if (keysDown["ArrowRight"])
+          camControllerRef.current.applyLookDelta(18 * dt * 60, 0, 0.0016);
+        if (keysDown["ArrowUp"]) camControllerRef.current.applyLookDelta(0, -14 * dt * 60, 0.0016);
+        if (keysDown["ArrowDown"]) camControllerRef.current.applyLookDelta(0, 14 * dt * 60, 0.0016);
       }
 
       // A. Player Locomotion + Full 3D Solid Non-Phaseable Obstacle & Vehicle Collision
@@ -1594,35 +1677,59 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
 
       _moveInput.set(0, 0, 0);
       if (!simPausedRef.current) {
-        if (keysDown['KeyW']) _moveInput.add(_forwardFlat);
-        if (keysDown['KeyS']) _moveInput.sub(_forwardFlat);
-        if (keysDown['KeyD']) _moveInput.add(_rightFlat);
-        if (keysDown['KeyA']) _moveInput.sub(_rightFlat);
+        if (keysDown["KeyW"]) _moveInput.add(_forwardFlat);
+        if (keysDown["KeyS"]) _moveInput.sub(_forwardFlat);
+        if (keysDown["KeyD"]) _moveInput.add(_rightFlat);
+        if (keysDown["KeyA"]) _moveInput.sub(_rightFlat);
       }
 
       const isMoving = _moveInput.lengthSq() > 0.001;
       if (isMoving && dt > 0) {
         _moveInput.normalize();
-        const sprintBoost = keysDown['ShiftLeft'] || keysDown['ShiftRight'] ? 1.38 : 1.0;
+        const sprintBoost = keysDown["ShiftLeft"] || keysDown["ShiftRight"] ? 1.38 : 1.0;
         const medkitSlow =
-          combatRef.current.healthStatus === 'APPLYING_MEDKIT'
+          combatRef.current.healthStatus === "APPLYING_MEDKIT"
             ? STANDARD_MEDICAL_GEAR.moveSpeedMultiplierWhileApplying
             : 1.0;
         const moveSpeed = 8.5 * sprintBoost * medkitSlow;
-        _playerPos.x = THREE.MathUtils.clamp(
-          _playerPos.x + _moveInput.x * moveSpeed * dt,
-          -THEATER_HALF_EXTENT + 10,
-          THEATER_HALF_EXTENT - 10
-        );
-        _playerPos.z = THREE.MathUtils.clamp(
-          _playerPos.z + _moveInput.z * moveSpeed * dt,
-          -THEATER_HALF_EXTENT + 10,
-          THEATER_HALF_EXTENT - 10
+        const totalDist = moveSpeed * dt;
+        const maxSubstep = 0.08; // 8cm max sub-step prevents high-speed wall tunneling
+        const subSteps = Math.min(10, Math.max(1, Math.ceil(totalDist / maxSubstep)));
+        const stepDist = totalDist / subSteps;
+
+        for (let s = 0; s < subSteps; s++) {
+          const subPrevX = _playerPos.x;
+          const subPrevZ = _playerPos.z;
+          _playerPos.x = THREE.MathUtils.clamp(
+            _playerPos.x + _moveInput.x * stepDist,
+            -THEATER_HALF_EXTENT + 10,
+            THEATER_HALF_EXTENT - 10,
+          );
+          _playerPos.z = THREE.MathUtils.clamp(
+            _playerPos.z + _moveInput.z * stepDist,
+            -THEATER_HALF_EXTENT + 10,
+            THEATER_HALF_EXTENT - 10,
+          );
+          staticPhysics.resolveHorizontalBody(
+            _playerPos,
+            _playerPos.y,
+            1.75,
+            0.44,
+            subPrevX,
+            subPrevZ,
+          );
+        }
+      } else {
+        // Zero-motion static pushout
+        staticPhysics.resolveHorizontalBody(
+          _playerPos,
+          _playerPos.y,
+          1.75,
+          0.44,
+          prevPlayerX,
+          prevPlayerZ,
         );
       }
-
-      // Resolve horizontal push-out against all static structures, bridges, rocks, trees & crates
-      staticPhysics.resolveHorizontalBody(_playerPos, _playerPos.y, 1.75, 0.44);
 
       // Resolve dynamic vehicle hull collisions (Squad 8x8 APC + Enemy Armored Convoy)
       resolveDynamicBoxCollision(
@@ -1635,7 +1742,9 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         1.52,
         2.8,
         3.28,
-        squadVehicle.root.rotation.y
+        squadVehicle.root.rotation.y,
+        prevPlayerX,
+        prevPlayerZ,
       );
       if (convoyHp > 0) {
         for (const cv of [convoyLeadEscort.root, convoyTruckMesh, convoyRearEscort.root]) {
@@ -1649,17 +1758,27 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
             1.48,
             2.8,
             3.28,
-            cv.rotation.y
+            cv.rotation.y,
+            prevPlayerX,
+            prevPlayerZ,
           );
         }
       }
       // Final static pass ensures a moving vehicle can never push the operator inside a wall or rock
-      staticPhysics.resolveHorizontalBody(_playerPos, _playerPos.y, 1.75, 0.44);
+      staticPhysics.resolveHorizontalBody(
+        _playerPos,
+        _playerPos.y,
+        1.75,
+        0.44,
+        prevPlayerX,
+        prevPlayerZ,
+      );
 
       // Stairs: you can't walk through the low end of a staircase from underneath.
       if (isBlockedByStairs(_playerPos.x, _playerPos.z, _playerPos.y)) {
         if (!isBlockedByStairs(_playerPos.x, prevPlayerZ, _playerPos.y)) _playerPos.z = prevPlayerZ;
-        else if (!isBlockedByStairs(prevPlayerX, _playerPos.z, _playerPos.y)) _playerPos.x = prevPlayerX;
+        else if (!isBlockedByStairs(prevPlayerX, _playerPos.z, _playerPos.y))
+          _playerPos.x = prevPlayerX;
         else {
           _playerPos.x = prevPlayerX;
           _playerPos.z = prevPlayerZ;
@@ -1673,7 +1792,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         _playerPos.y = baseGroundY;
       }
 
-      if (!simPausedRef.current && keysDown['Space'] && playerGrounded) {
+      if (!simPausedRef.current && keysDown["Space"] && playerGrounded) {
         verticalVel = 6.9;
         playerGrounded = false;
       }
@@ -1686,7 +1805,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         candidateY,
         1.75,
         0.4,
-        baseGroundY
+        baseGroundY,
       );
       _playerPos.y = vBounds.clampedY;
       if (vBounds.hitCeiling && verticalVel > 0) {
@@ -1708,7 +1827,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       sunLight.position.set(
         _playerPos.x + sunCfg[0] * 0.75,
         _playerPos.y + sunCfg[1] * 0.85,
-        _playerPos.z + sunCfg[2] * 0.75
+        _playerPos.z + sunCfg[2] * 0.75,
       );
       sunLight.target.position.copy(_playerPos);
 
@@ -1737,28 +1856,23 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         _muzzleWorld,
         collidableEnvironment,
         sampleWalkableHeight,
-        staticPhysics
+        staticPhysics,
       );
 
       const isFirstPersonVisual = telemetry.blendAlpha < 0.26;
       playerRig.root.visible = !isFirstPersonVisual;
-      shadowDisc.visible = !isFirstPersonVisual;
+      shadowDisc.visible = !isFirstPersonVisual && isSoftwareGl;
       fpViewmodel.root.visible = isFirstPersonVisual;
 
       // C. Step Player Combat State Machine
-      const fsmEvents = stepPlayerCombatStateMachine(
-        combatRef.current,
-        factionRef.current,
-        dt,
-        {
-          triggerHeld: !simPausedRef.current && triggerHeld,
-          triggerJustPressed: !simPausedRef.current && triggerJustPressed,
-          reloadJustPressed: !simPausedRef.current && reloadJustPressed,
-          switchSlotJustPressed: !simPausedRef.current && switchSlotJustPressed,
-          quickMeleeJustPressed: !simPausedRef.current && quickMeleeJustPressed,
-          healJustPressed: !simPausedRef.current && healJustPressed,
-        }
-      );
+      const fsmEvents = stepPlayerCombatStateMachine(combatRef.current, factionRef.current, dt, {
+        triggerHeld: !simPausedRef.current && triggerHeld,
+        triggerJustPressed: !simPausedRef.current && triggerJustPressed,
+        reloadJustPressed: !simPausedRef.current && reloadJustPressed,
+        switchSlotJustPressed: !simPausedRef.current && switchSlotJustPressed,
+        quickMeleeJustPressed: !simPausedRef.current && quickMeleeJustPressed,
+        healJustPressed: !simPausedRef.current && healJustPressed,
+      });
 
       triggerJustPressed = false;
       reloadJustPressed = false;
@@ -1769,11 +1883,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       if (fsmEvents.firedShot) {
         audioEngine.playRifleShot(factionRef.current === FactionId.WEST);
         muzzleFlashTimer = 0.05;
-        camControllerRef.current.applyCombatImpulse(
-          0.014,
-          (Math.random() - 0.5) * 0.008,
-          0.04
-        );
+        camControllerRef.current.applyCombatImpulse(0.014, (Math.random() - 0.5) * 0.008, 0.04);
         const gunSpec = FACTION_PRIMARY_FIREARMS[factionRef.current];
 
         // Anti-wallbang guard: verify gun barrel between operator shoulder & muzzle isn't poking into a wall/rock/tree
@@ -1792,7 +1902,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           _tmpVecA.set(
             telemetry.convergentMuzzleDir.x,
             telemetry.convergentMuzzleDir.y,
-            telemetry.convergentMuzzleDir.z
+            telemetry.convergentMuzzleDir.z,
           );
           spawnTracer(_muzzleWorld, _tmpVecA, true, gunSpec.baseDamage);
         }
@@ -1808,7 +1918,11 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         const swordSpec = FACTION_EMERGENCY_SWORDS[factionRef.current];
         _tmpVecC.set(_playerPos.x, _playerPos.y + 1.32, _playerPos.z);
         camera.getWorldDirection(_tmpVecD);
-        const bladeWallHit = staticPhysics.raycast(_tmpVecC, _tmpVecD, swordSpec.reachMeters * 0.85);
+        const bladeWallHit = staticPhysics.raycast(
+          _tmpVecC,
+          _tmpVecD,
+          swordSpec.reachMeters * 0.85,
+        );
         if (bladeWallHit) {
           _tmpVecB.set(bladeWallHit.pointX, bladeWallHit.pointY, bladeWallHit.pointZ);
           spawnImpactSparks(_tmpVecB, 5, false);
@@ -1818,7 +1932,8 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
 
       // Sword Cleave Arc Trail + Non-Phaseable Line-of-Sight Hit Detection
       playerRig.swordTrailMesh.visible = fsmEvents.swordCollisionWindowOpen && !isFirstPersonVisual;
-      fpViewmodel.swordTrailMesh.visible = fsmEvents.swordCollisionWindowOpen && isFirstPersonVisual;
+      fpViewmodel.swordTrailMesh.visible =
+        fsmEvents.swordCollisionWindowOpen && isFirstPersonVisual;
 
       if (fsmEvents.swordCollisionWindowOpen) {
         const swordSpec = FACTION_EMERGENCY_SWORDS[factionRef.current];
@@ -1840,7 +1955,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
               _tmpVecD.set(
                 enemy.rig.root.position.x,
                 enemy.rig.root.position.y + 1.15,
-                enemy.rig.root.position.z
+                enemy.rig.root.position.z,
               );
               // Block melee strike if any wall, boulder, tree trunk, or structure separates player & target
               if (!staticPhysics.hasLineOfSight(_tmpVecC, _tmpVecD, sampleWalkableHeight)) {
@@ -1850,7 +1965,9 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
               combatRef.current.activeHitEntitiesThisSwing.push(enemy.id);
               combatRef.current.swordDurability = Math.max(
                 10,
-                Number((combatRef.current.swordDurability - swordSpec.durabilityLossPerHit).toFixed(2))
+                Number(
+                  (combatRef.current.swordDurability - swordSpec.durabilityLossPerHit).toFixed(2),
+                ),
               );
               enemy.hp -= swingDmg;
               _tmpVecB.copy(enemy.rig.root.position).setY(enemy.rig.root.position.y + 1.15);
@@ -1878,13 +1995,13 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           fpViewmodel.rifleRig.position.x,
           adsX,
           18,
-          Math.max(dt, 0.016)
+          Math.max(dt, 0.016),
         );
         fpViewmodel.rifleRig.position.y = THREE.MathUtils.damp(
           fpViewmodel.rifleRig.position.y,
           adsY + (isMoving ? Math.sin(elapsed * 11) * 0.008 : 0),
           18,
-          Math.max(dt, 0.016)
+          Math.max(dt, 0.016),
         );
         fpViewmodel.rifleRig.position.z = -0.44 + recoilKick;
 
@@ -1897,7 +2014,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
             Math.sin(
               (combatRef.current.reloadTimerSec /
                 Math.max(0.1, combatRef.current.reloadDurationSec)) *
-                Math.PI
+                Math.PI,
             ) *
               0.18
           : -0.14;
@@ -1923,19 +2040,19 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           fpViewmodel.swordRig.rotation.y,
           slashYaw,
           24,
-          Math.max(dt, 0.016)
+          Math.max(dt, 0.016),
         );
         fpViewmodel.swordRig.rotation.x = THREE.MathUtils.damp(
           fpViewmodel.swordRig.rotation.x,
           slashPitch,
           24,
-          Math.max(dt, 0.016)
+          Math.max(dt, 0.016),
         );
         fpViewmodel.swordRig.position.z = THREE.MathUtils.damp(
           fpViewmodel.swordRig.position.z,
           slashZ,
           24,
-          Math.max(dt, 0.016)
+          Math.max(dt, 0.016),
         );
         playerRig.rightArmPivot.rotation.x = Math.PI * 0.55 + slashPitch * 0.8;
         playerRig.rightArmPivot.rotation.y = slashYaw * 0.6;
@@ -1953,7 +2070,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           1,
           telemetry.focalPointWorld.x,
           telemetry.focalPointWorld.y,
-          telemetry.focalPointWorld.z
+          telemetry.focalPointWorld.z,
         );
         sPos.needsUpdate = true;
 
@@ -1963,14 +2080,14 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           1,
           telemetry.focalPointWorld.x,
           telemetry.focalPointWorld.y,
-          telemetry.focalPointWorld.z
+          telemetry.focalPointWorld.z,
         );
         mPos.needsUpdate = true;
 
         focalSphere.position.set(
           telemetry.focalPointWorld.x,
           telemetry.focalPointWorld.y,
-          telemetry.focalPointWorld.z
+          telemetry.focalPointWorld.z,
         );
       }
 
@@ -2006,7 +2123,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           convoyLeadEscort.root.visible = true;
           convoyTruckMesh.visible = true;
           convoyRearEscort.root.visible = true;
-          setConvoyStatusText('A fresh Consortium convoy entered Grand Avenue');
+          setConvoyStatusText("A fresh Consortium convoy entered Grand Avenue");
         }
       }
 
@@ -2043,12 +2160,12 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           squadVehicle.root.position,
           squadVehicle.root.position.y,
           2.8,
-          1.85
+          1.85,
         );
 
         squadVehicle.root.position.y = sampleWalkableHeight(
           squadVehicle.root.position.x,
-          squadVehicle.root.position.z
+          squadVehicle.root.position.z,
         );
         const moveDx = squadVehicle.root.position.x - prevVx;
         const moveDz = squadVehicle.root.position.z - prevVz;
@@ -2058,7 +2175,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
             squadVehicle.root.rotation.y,
             Math.atan2(-moveDx, -moveDz),
             4.5,
-            dt
+            dt,
           );
           squadVehicle.wheels.forEach((w) => {
             w.rotation.x -= actualStep * 1.4;
@@ -2096,16 +2213,20 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
             1.52,
             2.8,
             3.28,
-            squadVehicle.root.rotation.y
+            squadVehicle.root.rotation.y,
           );
           staticPhysics.resolveHorizontalBody(op.root.position, op.root.position.y, 1.75, 0.45);
 
-          op.root.position.y = sampleCitySupport(op.root.position.x, op.root.position.z, op.root.position.y);
+          op.root.position.y = sampleCitySupport(
+            op.root.position.x,
+            op.root.position.z,
+            op.root.position.y,
+          );
           const actualMove = Math.hypot(op.root.position.x - prevOx, op.root.position.z - prevOz);
           if (actualMove > 0.002) {
             op.root.rotation.y = Math.atan2(
               -(op.root.position.x - prevOx),
-              -(op.root.position.z - prevOz)
+              -(op.root.position.z - prevOz),
             );
             op.leftLegPivot.rotation.x = Math.sin(elapsed * 9 + idx) * 0.4;
             op.rightLegPivot.rotation.x = -Math.sin(elapsed * 9 + idx) * 0.4;
@@ -2125,13 +2246,9 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         squadFireAccum = 0;
         squadVehicle.turretGroup.getWorldPosition(_tmpVecA);
         const liveEnemy = enemies.find((e) => {
-          if (!e.alive || (e.kind !== 'STREET' && e.kind !== 'WAVE')) return false;
+          if (!e.alive || (e.kind !== "STREET" && e.kind !== "WAVE")) return false;
           if (e.rig.root.position.distanceTo(squadVehicle.root.position) >= 64) return false;
-          _tmpVecD.set(
-            e.rig.root.position.x,
-            e.rig.root.position.y + 1.15,
-            e.rig.root.position.z
-          );
+          _tmpVecD.set(e.rig.root.position.x, e.rig.root.position.y + 1.15, e.rig.root.position.z);
           return staticPhysics.hasLineOfSight(_tmpVecA, _tmpVecD, sampleWalkableHeight);
         });
         if (liveEnemy) {
@@ -2150,7 +2267,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       const playerBuilding = findBuildingAt(_playerPos.x, _playerPos.z, 0.1);
       const playerFloor = playerBuilding ? getFloorAt(playerBuilding, _playerPos.y) : -1;
       if (!simPausedRef.current) {
-        updateDirector(dt, playerBuilding, playerFloor, !!keysDown['KeyE'], detonateJustPressed);
+        updateDirector(dt, playerBuilding, playerFloor, !!keysDown["KeyE"], detonateJustPressed);
       }
       detonateJustPressed = false;
 
@@ -2160,7 +2277,14 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           if (!slot.enemy) {
             slot.respawn -= dt;
             if (slot.respawn <= 0 && dist > 50 && dist < 105) {
-              slot.enemy = spawnEnemy({ kind: 'STREET', x: slot.x, z: slot.z, y: 0, bounds: null, floor: 0 });
+              slot.enemy = spawnEnemy({
+                kind: "STREET",
+                x: slot.x,
+                z: slot.z,
+                y: 0,
+                bounds: null,
+                floor: 0,
+              });
               streetSlotOf.set(slot.enemy, idx);
             }
           } else if (dist > 135) {
@@ -2179,7 +2303,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         const distToPlayer = pos.distanceTo(_playerPos);
         if (distToPlayer > 125) return;
 
-        const outdoorKind = enemy.kind === 'STREET' || enemy.kind === 'WAVE';
+        const outdoorKind = enemy.kind === "STREET" || enemy.kind === "WAVE";
         const engageRange = outdoorKind && !playerIndoors ? 55 : 34;
         enemy.losTimer -= dt;
         if (enemy.losTimer <= 0) {
@@ -2203,7 +2327,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
             tz = _playerPos.z;
             speed = 3.6;
           }
-        } else if (enemy.hasLos && distToPlayer < 22 && enemy.kind !== 'STREET') {
+        } else if (enemy.hasLos && distToPlayer < 22 && enemy.kind !== "STREET") {
           if (distToPlayer > 6) {
             tx = _playerPos.x;
             tz = _playerPos.z;
@@ -2239,7 +2363,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
             1.52,
             2.8,
             3.28,
-            squadVehicle.root.rotation.y
+            squadVehicle.root.rotation.y,
           );
           staticPhysics.resolveHorizontalBody(pos, enemy.floorY, 1.75, 0.45);
         }
@@ -2252,14 +2376,14 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           enemy.rig.root.rotation.y = Math.atan2(-(_playerPos.x - pos.x), -(_playerPos.z - pos.z));
           enemy.fireTimer -= dt;
           if (enemy.fireTimer <= 0) {
-            enemy.fireTimer = (enemy.kind === 'HVT' ? 0.85 : 1.35) + Math.random() * 0.9;
+            enemy.fireTimer = (enemy.kind === "HVT" ? 0.85 : 1.35) + Math.random() * 0.9;
             _tmpVecA.set(pos.x, pos.y + 1.45, pos.z);
             const spread = 0.5 + distToPlayer * 0.03;
             _tmpVecB
               .set(
                 _playerPos.x - pos.x + (Math.random() - 0.5) * spread * 2,
                 _playerPos.y + 1.15 - _tmpVecA.y + (Math.random() - 0.5) * spread,
-                _playerPos.z - pos.z + (Math.random() - 0.5) * spread * 2
+                _playerPos.z - pos.z + (Math.random() - 0.5) * spread * 2,
               )
               .normalize();
             spawnTracer(_tmpVecA, _tmpVecB, false, enemy.damage);
@@ -2275,7 +2399,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         dir: THREE.Vector3,
         segLen: number,
         target: THREE.Vector3,
-        radius: number
+        radius: number,
       ): number | null => {
         const rx = target.x - origin.x;
         const ry = target.y - origin.y;
@@ -2312,7 +2436,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           if (convoyHp > 0 && maxActorDist > 0.01) {
             const truckHits = _bulletRay.intersectObjects(
               [convoyTruckMesh, convoyLeadEscort.root, convoyRearEscort.root],
-              true
+              true,
             );
             if (truckHits.length > 0 && truckHits[0].distance <= maxActorDist + 0.1) {
               consumed = true;
@@ -2338,7 +2462,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                 _velDir,
                 apcStopDist,
                 _tmpVecA,
-                0.85
+                0.85,
               );
               if (hitProj !== null) {
                 consumed = true;
@@ -2362,7 +2486,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
             _velDir,
             maxActorDist,
             _tmpVecA,
-            2.35
+            2.35,
           );
           if (apcProj !== null) {
             consumed = true;
@@ -2373,12 +2497,12 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
             } else {
               const mitigated = Math.max(
                 1,
-                Math.round(tr.damage * (1 - vehicleRef.current.kineticMitigation))
+                Math.round(tr.damage * (1 - vehicleRef.current.kineticMitigation)),
               );
               if (vehicleRef.current.armorPlatingHp > 0) {
                 vehicleRef.current.armorPlatingHp = Math.max(
                   0,
-                  vehicleRef.current.armorPlatingHp - mitigated
+                  vehicleRef.current.armorPlatingHp - mitigated,
                 );
               } else {
                 vehicleRef.current.hullHp = Math.max(120, vehicleRef.current.hullHp - mitigated);
@@ -2391,7 +2515,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
               _velDir,
               maxActorDist,
               _tmpVecB,
-              0.75
+              0.75,
             );
             if (playerProj !== null) {
               consumed = true;
@@ -2474,8 +2598,12 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         }
       }
 
-      if (!activePrompt && playerBuilding === safehouse && campaignRef.current.completedMissionIds.includes('m01')) {
-        activePrompt = 'Press [E] to rest at the safehouse — full health, ammo and medkits';
+      if (
+        !activePrompt &&
+        playerBuilding === safehouse &&
+        campaignRef.current.completedMissionIds.includes("m01")
+      ) {
+        activePrompt = "Press [E] to rest at the safehouse — full health, ammo and medkits";
         if (interactJustPressed) {
           const c = combatRef.current;
           c.hp = c.maxHp;
@@ -2485,7 +2613,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           c.healthStatus = HealthStatus.NOMINAL;
           c.autoSwitchedOnZeroAmmo = false;
           audioEngine.playMedkitApply();
-          callbacksRef.current.onToast('Rested at Kestrel Row. Fully resupplied.');
+          callbacksRef.current.onToast("Rested at Kestrel Row. Fully resupplied.");
         }
       }
 
@@ -2493,7 +2621,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         if (activePrompt || crate.collected) continue;
         const dist = crate.mesh.position.distanceTo(_playerPos);
         if (dist < 4.8) {
-          activePrompt = 'Press [E] to salvage the convoy crate';
+          activePrompt = "Press [E] to salvage the convoy crate";
           if (interactJustPressed) {
             crate.collected = true;
             crate.mesh.visible = false;
@@ -2528,7 +2656,10 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       interactJustPressed = false;
 
       // Waypoint beam follows the current mission target
-      if (directorWaypoint && Math.hypot(directorWaypoint.x - _playerPos.x, directorWaypoint.z - _playerPos.z) > 14) {
+      if (
+        directorWaypoint &&
+        Math.hypot(directorWaypoint.x - _playerPos.x, directorWaypoint.z - _playerPos.z) > 14
+      ) {
         waypointBeam.visible = true;
         waypointBeam.position.set(directorWaypoint.x, directorWaypoint.y, directorWaypoint.z);
       } else {
@@ -2559,7 +2690,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
 
         directorHud.locationLabel = playerBuilding
           ? `${playerBuilding.name} · Floor ${playerFloor + 1} of ${playerBuilding.floors}`
-          : 'Streets of Varos-Meridian';
+          : "Streets of Varos-Meridian";
         setMissionHud({ ...directorHud });
         setMapWaypoint(directorWaypoint ? { x: directorWaypoint.x, z: directorWaypoint.z } : null);
 
@@ -2592,15 +2723,15 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     return () => {
       cancelAnimationFrame(frameId);
       clearTimeout(frameId);
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-      window.removeEventListener('mousedown', onMouseDown);
-      window.removeEventListener('mouseup', onMouseUp);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('contextmenu', onContextMenu);
-      document.removeEventListener('pointerlockchange', onPointerLockChange);
-      window.removeEventListener('resize', onResize);
-      renderer.domElement.removeEventListener('webglcontextlost', handleContextLost);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("contextmenu", onContextMenu);
+      document.removeEventListener("pointerlockchange", onPointerLockChange);
+      window.removeEventListener("resize", onResize);
+      renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
       for (let i = enemies.length - 1; i >= 0; i--) despawnEnemy(enemies[i]);
       city.dispose();
       matLib.dispose();
@@ -2614,11 +2745,9 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
   const targetBuildingId = getStepBuilding(currentStep)?.id ?? null;
   const missionsDone = campaign.completedMissionIds.length;
 
-  const availableUpgrades = techNodes.filter(
-    (n) => n.stage !== RetrofitStage.FIELD_RETROFITTED
-  );
+  const availableUpgrades = techNodes.filter((n) => n.stage !== RetrofitStage.FIELD_RETROFITTED);
   const readyUpgrades = availableUpgrades.filter(
-    (n) => canAdvanceRetrofitStage(n, techNodes, salvageInventory).allowed
+    (n) => canAdvanceRetrofitStage(n, techNodes, salvageInventory).allowed,
   );
   const nextUpgradeToDisplay = readyUpgrades[0] ?? availableUpgrades[0] ?? null;
   const equippedUpgradeCount = techNodes.length - availableUpgrades.length;
@@ -2632,6 +2761,16 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     <div className="relative w-full h-screen overflow-hidden bg-[#0B0E13] select-none">
       {/* Isolated WebGL Canvas Container */}
       <div ref={canvasMountRef} className="w-full h-full cursor-crosshair" />
+
+      {/* Cinematic Vignette & Edge Grading Overlay */}
+      <div
+        className="pointer-events-none absolute inset-0 z-5"
+        style={{
+          background:
+            "radial-gradient(ellipse at center, rgba(0,0,0,0) 60%, rgba(5,8,12,0.35) 85%, rgba(2,4,7,0.65) 100%)",
+          boxShadow: "inset 0 0 80px rgba(0,0,0,0.45)",
+        }}
+      />
 
       {/* Render Player HUD Only During Active Round */}
       {isRoundActive && !isMenuOpen && (
@@ -2665,7 +2804,10 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                     fontSize="10"
                     fontFamily="monospace"
                   >
-                    {pinnedHudProj.distMeters}m · {pinnedHudProj.title.length > 26 ? `${pinnedHudProj.title.slice(0, 25)}…` : pinnedHudProj.title}
+                    {pinnedHudProj.distMeters}m ·{" "}
+                    {pinnedHudProj.title.length > 26
+                      ? `${pinnedHudProj.title.slice(0, 25)}…`
+                      : pinnedHudProj.title}
                   </text>
                   <polygon
                     points="0,-2 6,4 0,10 -6,4"
@@ -2742,7 +2884,9 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                 compactMinimap
               />
               <div className="absolute bottom-1.5 left-2 right-2 flex justify-between items-center bg-[#090D12]/90 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-200 tabular-nums">
-                <span>{missionsDone}/{MISSIONS.length}</span>
+                <span>
+                  {missionsDone}/{MISSIONS.length}
+                </span>
                 <span className="text-[#F59E0B] font-semibold">[M] MAP</span>
               </div>
             </button>
@@ -2754,16 +2898,22 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                   {missionHud.missionLabel.toUpperCase()}
                 </span>
                 {pinnedHudProj.distMeters > 0 && missionHud.stepText && (
-                  <span className="text-sky-300 tabular-nums shrink-0">{pinnedHudProj.distMeters}m</span>
+                  <span className="text-sky-300 tabular-nums shrink-0">
+                    {pinnedHudProj.distMeters}m
+                  </span>
                 )}
               </div>
               <div className="font-semibold text-white leading-snug">{missionHud.stepText}</div>
-              {missionHud.detail && <div className="text-[11px] text-slate-300">{missionHud.detail}</div>}
+              {missionHud.detail && (
+                <div className="text-[11px] text-slate-300">{missionHud.detail}</div>
+              )}
               {missionHud.progress !== null && (
                 <div className="h-1.5 bg-slate-800 rounded overflow-hidden">
                   <div
                     className="h-full bg-[#F59E0B] transition-[width] duration-150"
-                    style={{ width: `${Math.round(Math.max(0, Math.min(1, missionHud.progress)) * 100)}%` }}
+                    style={{
+                      width: `${Math.round(Math.max(0, Math.min(1, missionHud.progress)) * 100)}%`,
+                    }}
                   />
                 </div>
               )}
@@ -2792,7 +2942,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
           {/* Player HUD Dock: Health, Armor Health, Ammo, Available Upgrades & Controls */}
           <div
             className={`absolute bottom-4 left-1/2 -translate-x-1/2 w-[min(1060px,95vw)] transition-transform duration-200 z-20 ${
-              dockCollapsed ? 'translate-y-[calc(100%-32px)]' : 'translate-y-0'
+              dockCollapsed ? "translate-y-[calc(100%-32px)]" : "translate-y-0"
             }`}
           >
             <div className="flex justify-center mb-1.5">
@@ -2806,7 +2956,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                 ) : (
                   <ChevronDown className="w-3.5 h-3.5" />
                 )}
-                <span>{dockCollapsed ? 'Show HUD & Controls [H]' : 'Hide Controls [H]'}</span>
+                <span>{dockCollapsed ? "Show HUD & Controls [H]" : "Hide Controls [H]"}</span>
               </button>
             </div>
 
@@ -2833,9 +2983,12 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                       <rect
                         x="0"
                         y="0"
-                        width={Math.max(0, Math.min(100, (playerState.hp / playerState.maxHp) * 100))}
+                        width={Math.max(
+                          0,
+                          Math.min(100, (playerState.hp / playerState.maxHp) * 100),
+                        )}
                         height="6"
-                        fill={playerState.hp <= 30 ? '#EF4444' : '#10B981'}
+                        fill={playerState.hp <= 30 ? "#EF4444" : "#10B981"}
                       />
                     </svg>
                   </div>
@@ -2847,7 +3000,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                         Armor Health
                       </span>
                       <span className="font-mono font-semibold text-sky-300 tabular-nums">
-                        Plate {Math.round(playerState.armorIntegrity)}% · APC{' '}
+                        Plate {Math.round(playerState.armorIntegrity)}% · APC{" "}
                         {vehicleState.armorPlatingHp}/{vehicleState.maxArmorPlatingHp}
                       </span>
                     </div>
@@ -2879,7 +3032,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                       </div>
                       <div className="flex items-baseline justify-between">
                         <span className="font-mono text-2xl font-bold text-[#F59E0B] tabular-nums">
-                          {playerState.magazineAmmo}{' '}
+                          {playerState.magazineAmmo}{" "}
                           <span className="text-sm font-normal text-slate-400">
                             / {playerState.reserveAmmo}
                           </span>
@@ -2887,8 +3040,8 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                         <span className="text-[11px] font-mono text-slate-400">
                           {playerState.firearmState === FirearmState.RELOAD_TACTICAL ||
                           playerState.firearmState === FirearmState.RELOAD_DRY
-                            ? 'RELOADING...'
-                            : '[R] Reload · [2] Sword'}
+                            ? "RELOADING..."
+                            : "[R] Reload · [2] Sword"}
                         </span>
                       </div>
                     </>
@@ -2929,7 +3082,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
 
                   {nextUpgradeToDisplay ? (
                     <div className="text-[11px] text-slate-200 truncate">
-                      Next: <span className="font-semibold">{nextUpgradeToDisplay.name}</span>{' '}
+                      Next: <span className="font-semibold">{nextUpgradeToDisplay.name}</span>{" "}
                       {readyUpgrades.length > 0 ? (
                         <span className="text-emerald-400 font-mono font-semibold">
                           (ready — press E at the APC)
@@ -2947,7 +3100,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                   )}
 
                   <div className="text-[11px] text-slate-400 font-mono tabular-nums">
-                    Salvage: {salvageInventory.rawScrapAlloy} Alloy · {eraPlates} Plates ·{' '}
+                    Salvage: {salvageInventory.rawScrapAlloy} Alloy · {eraPlates} Plates ·{" "}
                     {salvageInventory.encryptedFireControlChips} Chips
                   </div>
                 </div>
@@ -3006,10 +3159,14 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                       musicEngine.setMuted(nextMute);
                       setMuted(nextMute);
                     }}
-                    aria-label={muted ? 'Unmute audio' : 'Mute audio'}
+                    aria-label={muted ? "Unmute audio" : "Mute audio"}
                     className="p-1.5 rounded-md bg-slate-800 text-slate-300 hover:text-white transition-colors shrink-0 cursor-pointer"
                   >
-                    {muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                    {muted ? (
+                      <VolumeX className="w-3.5 h-3.5" />
+                    ) : (
+                      <Volume2 className="w-3.5 h-3.5" />
+                    )}
                   </button>
                 </div>
               </div>

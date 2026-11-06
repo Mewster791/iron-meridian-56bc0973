@@ -1,11 +1,11 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 import {
   CameraRigConfig,
   CameraRigTelemetry,
   PerspectiveMode,
   ShoulderSide,
-} from '../types/systems';
-import { StaticWorldPhysics } from './staticCollisionSystem';
+} from "../types/systems";
+import { StaticWorldPhysics } from "./staticCollisionSystem";
 
 export const DEFAULT_CAMERA_RIG_CONFIG: CameraRigConfig = {
   firstPersonEyeOffset: { x: 0.0, y: 1.64, z: 0.08 },
@@ -31,7 +31,7 @@ const _pivotFp = new THREE.Vector3();
 const _pivotTp = new THREE.Vector3();
 const _activePivot = new THREE.Vector3();
 const _camRotQuat = new THREE.Quaternion();
-const _camEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+const _camEuler = new THREE.Euler(0, 0, 0, "YXZ");
 const _rightVec = new THREE.Vector3();
 const _upVec = new THREE.Vector3();
 const _backVec = new THREE.Vector3();
@@ -91,9 +91,7 @@ export class SeamlessCameraPovController {
 
   public swapShoulder(): ShoulderSide {
     this.shoulderSide =
-      this.shoulderSide === ShoulderSide.RIGHT
-        ? ShoulderSide.LEFT
-        : ShoulderSide.RIGHT;
+      this.shoulderSide === ShoulderSide.RIGHT ? ShoulderSide.LEFT : ShoulderSide.RIGHT;
     return this.shoulderSide;
   }
 
@@ -103,7 +101,7 @@ export class SeamlessCameraPovController {
     this.pitchRad = THREE.MathUtils.clamp(
       this.pitchRad - deltaY * sensitivity * adsScale,
       -Math.PI * 0.44,
-      Math.PI * 0.44
+      Math.PI * 0.44,
     );
   }
 
@@ -121,7 +119,7 @@ export class SeamlessCameraPovController {
     origin: THREE.Vector3,
     dir: THREE.Vector3,
     maxDist: number,
-    sampleTerrain: (x: number, z: number) => number
+    sampleTerrain: (x: number, z: number) => number,
   ): number {
     const coarseStep = 2.0;
     let prevT = 0.5;
@@ -154,14 +152,14 @@ export class SeamlessCameraPovController {
     muzzleWorldPos: THREE.Vector3,
     collidableMeshes: THREE.Object3D[],
     sampleTerrainHeight: (x: number, z: number) => number,
-    staticPhysics?: StaticWorldPhysics
+    staticPhysics?: StaticWorldPhysics,
   ): CameraRigTelemetry {
     const targetAlpha = this.targetMode === PerspectiveMode.THIRD_PERSON ? 1.0 : 0.0;
     this.blendAlpha = THREE.MathUtils.damp(
       this.blendAlpha,
       targetAlpha,
       this.config.transitionSpeedLambda,
-      dt
+      dt,
     );
 
     // Recover recoil & trauma shake smoothly
@@ -170,8 +168,7 @@ export class SeamlessCameraPovController {
     this.shakeIntensity = THREE.MathUtils.damp(this.shakeIntensity, 0, 6.5, dt);
     this.shakeClock += dt * 38.0;
 
-    const smoothAlpha =
-      this.blendAlpha * this.blendAlpha * (3 - 2 * this.blendAlpha);
+    const smoothAlpha = this.blendAlpha * this.blendAlpha * (3 - 2 * this.blendAlpha);
 
     const shakePitch = Math.sin(this.shakeClock * 1.3) * this.shakeIntensity * 0.025;
     const shakeRoll = Math.cos(this.shakeClock * 1.7) * this.shakeIntensity * 0.03;
@@ -179,11 +176,11 @@ export class SeamlessCameraPovController {
     const effectivePitch = THREE.MathUtils.clamp(
       this.pitchRad + this.recoilPitchOffset + shakePitch,
       -Math.PI * 0.46,
-      Math.PI * 0.46
+      Math.PI * 0.46,
     );
     const effectiveYaw = this.yawRad + this.recoilYawOffset;
 
-    _camEuler.set(effectivePitch, effectiveYaw, shakeRoll, 'YXZ');
+    _camEuler.set(effectivePitch, effectiveYaw, shakeRoll, "YXZ");
     _camRotQuat.setFromEuler(_camEuler);
 
     _rightVec.set(1, 0, 0).applyQuaternion(_camRotQuat);
@@ -196,7 +193,7 @@ export class SeamlessCameraPovController {
     _pivotFp.set(
       playerWorldPos.x - sinYaw * this.config.firstPersonEyeOffset.z,
       playerWorldPos.y + this.config.firstPersonEyeOffset.y,
-      playerWorldPos.z - cosYaw * this.config.firstPersonEyeOffset.z
+      playerWorldPos.z - cosYaw * this.config.firstPersonEyeOffset.z,
     );
 
     // 2. Smoothly damped Shoulder Swap & ADS Offset
@@ -212,13 +209,13 @@ export class SeamlessCameraPovController {
       this.currentShoulderOffset,
       targetShoulder,
       14.5,
-      dt
+      dt,
     );
 
     _pivotTp.set(
       playerWorldPos.x,
       playerWorldPos.y + this.config.thirdPersonPivotOffset.y,
-      playerWorldPos.z
+      playerWorldPos.z,
     );
 
     _desiredTpPos
@@ -290,10 +287,7 @@ export class SeamlessCameraPovController {
       }
     }
 
-    const safeTargetSpan = Math.max(
-      this.config.minArmClamp,
-      fullSpanDist * minSafeFraction
-    );
+    const safeTargetSpan = Math.max(this.config.minArmClamp, fullSpanDist * minSafeFraction);
     const armLambda =
       safeTargetSpan < this.currentArmLength
         ? this.config.collisionSnapInLambda
@@ -303,12 +297,10 @@ export class SeamlessCameraPovController {
       this.currentArmLength,
       safeTargetSpan,
       armLambda,
-      dt
+      dt,
     );
 
-    _desiredTpPos
-      .copy(_pivotTp)
-      .addScaledVector(_armDir, this.currentArmLength);
+    _desiredTpPos.copy(_pivotTp).addScaledVector(_armDir, this.currentArmLength);
 
     const groundAtCam = sampleTerrainHeight(_desiredTpPos.x, _desiredTpPos.z);
     if (_desiredTpPos.y < groundAtCam + probeR + 0.14) {
@@ -324,7 +316,7 @@ export class SeamlessCameraPovController {
     const baseFov = THREE.MathUtils.lerp(
       this.config.fovFirstPerson,
       this.config.fovThirdPerson,
-      smoothAlpha
+      smoothAlpha,
     );
     const targetFov = this.isAimingDownSights ? this.config.fovAds : baseFov;
     if (Math.abs(camera.fov - targetFov) > 0.02) {
@@ -342,16 +334,9 @@ export class SeamlessCameraPovController {
 
     let focalDistance = this.config.maxAimTraceDistance;
     if (staticPhysics) {
-      const staticSightHit = staticPhysics.raycast(
-        _sightOrigin,
-        _sightDir,
-        focalDistance
-      );
+      const staticSightHit = staticPhysics.raycast(_sightOrigin, _sightDir, focalDistance);
       if (staticSightHit && staticSightHit.distance >= 0.25) {
-        focalDistance = Math.max(
-          this.config.minConvergenceDistance,
-          staticSightHit.distance
-        );
+        focalDistance = Math.max(this.config.minConvergenceDistance, staticSightHit.distance);
       }
     }
 
@@ -361,10 +346,7 @@ export class SeamlessCameraPovController {
       _raycaster.far = focalDistance;
       const sightHits = _raycaster.intersectObjects(collidableMeshes, true);
       if (sightHits.length > 0) {
-        focalDistance = Math.max(
-          this.config.minConvergenceDistance,
-          sightHits[0].distance
-        );
+        focalDistance = Math.max(this.config.minConvergenceDistance, sightHits[0].distance);
       }
     }
 
@@ -372,16 +354,14 @@ export class SeamlessCameraPovController {
       _sightOrigin,
       _sightDir,
       focalDistance,
-      sampleTerrainHeight
+      sampleTerrainHeight,
     );
     focalDistance = Math.max(
       this.config.minConvergenceDistance,
-      Math.min(focalDistance, terrainHitDist)
+      Math.min(focalDistance, terrainHitDist),
     );
 
-    _focalPoint
-      .copy(_sightOrigin)
-      .addScaledVector(_sightDir, focalDistance);
+    _focalPoint.copy(_sightOrigin).addScaledVector(_sightDir, focalDistance);
 
     _muzzleDir.subVectors(_focalPoint, muzzleWorldPos).normalize();
 
@@ -399,9 +379,7 @@ export class SeamlessCameraPovController {
         const sBlock = staticPhysics.raycast(muzzleWorldPos, _muzzleDir, traceLimit);
         if (sBlock) {
           muzzleBlockedByCover = true;
-          _projectedBlock
-            .set(sBlock.pointX, sBlock.pointY, sBlock.pointZ)
-            .project(camera);
+          _projectedBlock.set(sBlock.pointX, sBlock.pointY, sBlock.pointZ).project(camera);
           blockedNdcX = THREE.MathUtils.clamp(_projectedBlock.x, -0.9, 0.9);
           blockedNdcY = THREE.MathUtils.clamp(_projectedBlock.y, -0.9, 0.9);
         }

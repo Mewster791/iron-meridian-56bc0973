@@ -4,13 +4,15 @@ class ProceduralAudioEngine {
 
   private ensureContext(): AudioContext | null {
     if (this.muted) return null;
-    if (!this.ctx && typeof window !== 'undefined') {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!this.ctx && typeof window !== "undefined") {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
         this.ctx = new AudioCtx();
       }
     }
-    if (this.ctx && this.ctx.state === 'suspended') {
+    if (this.ctx && this.ctx.state === "suspended") {
       this.ctx.resume().catch(() => {});
     }
     return this.ctx;
@@ -42,7 +44,7 @@ class ProceduralAudioEngine {
     noise.buffer = buffer;
 
     const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
+    filter.type = "bandpass";
     filter.frequency.setValueAtTime(isWestCaliber ? 1650 : 1320, now);
     filter.Q.setValueAtTime(0.9, now);
 
@@ -58,7 +60,7 @@ class ProceduralAudioEngine {
     // Sub-bass chamber punch
     const osc = ctx.createOscillator();
     const oscGain = ctx.createGain();
-    osc.type = 'triangle';
+    osc.type = "triangle";
     osc.frequency.setValueAtTime(isWestCaliber ? 165 : 140, now);
     osc.frequency.exponentialRampToValueAtTime(42, now + 0.075);
 
@@ -77,7 +79,7 @@ class ProceduralAudioEngine {
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = 'square';
+    osc.type = "square";
     osc.frequency.setValueAtTime(1950, now);
     osc.frequency.exponentialRampToValueAtTime(620, now + 0.025);
     gain.gain.setValueAtTime(0.12, now);
@@ -95,7 +97,7 @@ class ProceduralAudioEngine {
     [0, 0.14].forEach((offset, idx) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = 'triangle';
+      osc.type = "triangle";
       osc.frequency.setValueAtTime(idx === 0 ? 520 : 880, now + offset);
       osc.frequency.exponentialRampToValueAtTime(idx === 0 ? 280 : 1240, now + offset + 0.05);
       gain.gain.setValueAtTime(0.14, now + offset);
@@ -125,7 +127,7 @@ class ProceduralAudioEngine {
     noise.buffer = buffer;
 
     const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
+    filter.type = "bandpass";
     const baseFreq = comboStep === 3 ? 1150 : comboStep === 2 ? 890 : 740;
     filter.frequency.setValueAtTime(baseFreq * 0.6, now);
     filter.frequency.exponentialRampToValueAtTime(baseFreq * 1.7, now + 0.14);
@@ -143,7 +145,7 @@ class ProceduralAudioEngine {
     // Subtle steel ring
     const ring = ctx.createOscillator();
     const ringGain = ctx.createGain();
-    ring.type = 'sine';
+    ring.type = "sine";
     ring.frequency.setValueAtTime(2650 + comboStep * 280, now);
     ringGain.gain.setValueAtTime(0.05, now);
     ringGain.gain.exponentialRampToValueAtTime(0.0008, now + 0.22);
@@ -159,7 +161,7 @@ class ProceduralAudioEngine {
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = 'sine';
+    osc.type = "sine";
     osc.frequency.setValueAtTime(toThirdPerson ? 480 : 680, now);
     osc.frequency.exponentialRampToValueAtTime(toThirdPerson ? 680 : 480, now + 0.07);
     gain.gain.setValueAtTime(0.08, now);
@@ -177,7 +179,7 @@ class ProceduralAudioEngine {
     [220, 330, 495].forEach((freq, idx) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = 'triangle';
+      osc.type = "triangle";
       osc.frequency.setValueAtTime(freq, now + idx * 0.07);
       gain.gain.setValueAtTime(0.15, now + idx * 0.07);
       gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.07 + 0.14);
@@ -194,7 +196,7 @@ class ProceduralAudioEngine {
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = 'sine';
+    osc.type = "sine";
     osc.frequency.setValueAtTime(520, now);
     osc.frequency.linearRampToValueAtTime(780, now + 0.18);
     gain.gain.setValueAtTime(0.11, now);
@@ -219,7 +221,7 @@ class ProceduralAudioEngine {
     noise.buffer = buffer;
 
     const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
+    filter.type = "lowpass";
     filter.frequency.setValueAtTime(420, now);
     filter.frequency.exponentialRampToValueAtTime(65, now + 0.42);
 

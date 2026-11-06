@@ -1,6 +1,6 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
-export type ColliderMaterial = 'CONCRETE' | 'STEEL' | 'ROCK' | 'WOOD';
+export type ColliderMaterial = "CONCRETE" | "STEEL" | "ROCK" | "WOOD";
 
 export interface StaticCollider {
   id: string;
@@ -57,8 +57,8 @@ export class StaticWorldPhysics {
     normalX: 0,
     normalY: 1,
     normalZ: 0,
-    material: 'CONCRETE',
-    colliderId: '',
+    material: "CONCRETE",
+    colliderId: "",
   };
 
   public clear(): void {
@@ -121,10 +121,10 @@ export class StaticWorldPhysics {
       minY: params.minY,
       maxY: params.maxY,
       boundingRadius,
-      material: params.material ?? 'CONCRETE',
+      material: params.material ?? "CONCRETE",
       walkableTop: params.walkableTop ?? true,
       stepUp: params.stepUp ?? 0.12,
-      group: params.group ?? '',
+      group: params.group ?? "",
       active: true,
     };
 
@@ -153,10 +153,10 @@ export class StaticWorldPhysics {
       minY: params.minY,
       maxY: params.maxY,
       boundingRadius: params.radius,
-      material: params.material ?? 'WOOD',
+      material: params.material ?? "WOOD",
       walkableTop: params.walkableTop ?? false,
       stepUp: 0.12,
-      group: '',
+      group: "",
       active: true,
     };
 
@@ -207,7 +207,9 @@ export class StaticWorldPhysics {
     outPos: { x: number; z: number },
     actorBottomY: number,
     actorHeight: number,
-    actorRadius: number
+    actorRadius: number,
+    prevX?: number,
+    prevZ?: number,
   ): boolean {
     let collided = false;
     const actorTopY = actorBottomY + actorHeight;
@@ -256,19 +258,69 @@ export class StaticWorldPhysics {
             if (distSq >= combinedR * combinedR) continue;
 
             collided = true;
+
+            // Previous position in collider local space if available
+            let prevLx = lx;
+            let prevLz = lz;
+            let hasPrev = false;
+            if (prevX !== undefined && prevZ !== undefined) {
+              const pdx = prevX - col.cx;
+              const pdz = prevZ - col.cz;
+              prevLx = pdx * col.cosYaw - pdz * col.sinYaw;
+              prevLz = pdx * col.sinYaw + pdz * col.cosYaw;
+              hasPrev = true;
+            }
+
             if (distSq > 1e-8) {
-              const dist = Math.sqrt(distSq);
-              const push = (combinedR - dist) / dist;
-              lx += ex * push;
-              lz += ez * push;
+              // Tunneling check: if coming from outside one boundary, ensure we push back to that side
+              let tunneled = false;
+              if (hasPrev) {
+                if (prevLx <= -col.halfX && lx > 0) {
+                  lx = -(col.halfX + combinedR);
+                  tunneled = true;
+                } else if (prevLx >= col.halfX && lx < 0) {
+                  lx = col.halfX + combinedR;
+                  tunneled = true;
+                } else if (prevLz <= -col.halfZ && lz > 0) {
+                  lz = -(col.halfZ + combinedR);
+                  tunneled = true;
+                } else if (prevLz >= col.halfZ && lz < 0) {
+                  lz = col.halfZ + combinedR;
+                  tunneled = true;
+                }
+              }
+
+              if (!tunneled) {
+                const dist = Math.sqrt(distSq);
+                const push = (combinedR - dist) / dist;
+                lx += ex * push;
+                lz += ez * push;
+              }
             } else {
-              // Deep penetration inside inner box: push out along minimum penetration axis
-              const penX = col.halfX + combinedR - Math.abs(lx);
-              const penZ = col.halfZ + combinedR - Math.abs(lz);
-              if (penX < penZ) {
-                lx = lx >= 0 ? col.halfX + combinedR : -(col.halfX + combinedR);
+              // Deep penetration inside inner box: push out along entry side or minimum penetration axis
+              if (hasPrev) {
+                if (prevLx <= -col.halfX) {
+                  lx = -(col.halfX + combinedR);
+                } else if (prevLx >= col.halfX) {
+                  lx = col.halfX + combinedR;
+                } else if (prevLz <= -col.halfZ) {
+                  lz = -(col.halfZ + combinedR);
+                } else if (prevLz >= col.halfZ) {
+                  lz = col.halfZ + combinedR;
+                } else {
+                  const penX = col.halfX + combinedR - Math.abs(lx);
+                  const penZ = col.halfZ + combinedR - Math.abs(lz);
+                  if (penX < penZ) lx = lx >= 0 ? col.halfX + combinedR : -(col.halfX + combinedR);
+                  else lz = lz >= 0 ? col.halfZ + combinedR : -(col.halfZ + combinedR);
+                }
               } else {
-                lz = lz >= 0 ? col.halfZ + combinedR : -(col.halfZ + combinedR);
+                const penX = col.halfX + combinedR - Math.abs(lx);
+                const penZ = col.halfZ + combinedR - Math.abs(lz);
+                if (penX < penZ) {
+                  lx = lx >= 0 ? col.halfX + combinedR : -(col.halfX + combinedR);
+                } else {
+                  lz = lz >= 0 ? col.halfZ + combinedR : -(col.halfZ + combinedR);
+                }
               }
             }
 
@@ -293,7 +345,7 @@ export class StaticWorldPhysics {
     currentBottomY: number,
     actorHeight: number,
     footRadius: number,
-    baseGroundY: number
+    baseGroundY: number,
   ): { groundY: number; clampedY: number; hitCeiling: boolean } {
     let supportY = baseGroundY;
     let clampedY = currentBottomY;
@@ -341,10 +393,7 @@ export class StaticWorldPhysics {
           }
 
           // Overhead ceiling block (e.g. under river bridges)
-          if (
-            prevBottomY + actorHeight <= col.minY + 0.25 &&
-            clampedY + actorHeight > col.minY
-          ) {
+          if (prevBottomY + actorHeight <= col.minY + 0.25 && clampedY + actorHeight > col.minY) {
             clampedY = col.minY - actorHeight;
             hitCeiling = true;
           }
@@ -366,7 +415,7 @@ export class StaticWorldPhysics {
   public raycast(
     origin: THREE.Vector3,
     dir: THREE.Vector3,
-    maxDist: number
+    maxDist: number,
   ): RaycastStaticHit | null {
     if (maxDist <= 0) return null;
 
@@ -433,7 +482,7 @@ export class StaticWorldPhysics {
               col.cornerRadius,
               col.minY,
               col.maxY,
-              Math.min(maxDist, bestT)
+              Math.min(maxDist, bestT),
             );
             if (hit && hit.t < bestT) {
               bestT = hit.t;
@@ -456,7 +505,7 @@ export class StaticWorldPhysics {
               col.cornerRadius,
               col.minY,
               col.maxY,
-              Math.min(maxDist, bestT)
+              Math.min(maxDist, bestT),
             );
             if (hit && hit.t < bestT) {
               bestT = hit.t;
@@ -495,7 +544,7 @@ export class StaticWorldPhysics {
   public hasLineOfSight(
     from: THREE.Vector3,
     to: THREE.Vector3,
-    sampleTerrain?: (x: number, z: number) => number
+    sampleTerrain?: (x: number, z: number) => number,
   ): boolean {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
@@ -533,7 +582,7 @@ export class StaticWorldPhysics {
     r: number,
     minY: number,
     maxY: number,
-    limitT: number
+    limitT: number,
   ): { t: number; nx: number; ny: number; nz: number } | null {
     // Check if ray origin is already inside cylinder
     if (oy >= minY && oy <= maxY && ox * ox + oz * oz <= r * r) {
@@ -607,7 +656,7 @@ export class StaticWorldPhysics {
     cornerR: number,
     minY: number,
     maxY: number,
-    limitT: number
+    limitT: number,
   ): { t: number; nx: number; ny: number; nz: number } | null {
     const extX = halfX + cornerR;
     const extZ = halfZ + cornerR;
@@ -748,7 +797,9 @@ export function resolveDynamicBoxCollision(
   boxHalfX: number,
   boxHeight: number,
   boxHalfZ: number,
-  boxYaw: number
+  boxYaw: number,
+  prevX?: number,
+  prevZ?: number,
 ): boolean {
   if (actorBottomY >= boxBottomY + boxHeight - 0.1 || actorBottomY + 1.8 <= boxBottomY) {
     return false;
@@ -770,16 +821,58 @@ export function resolveDynamicBoxCollision(
   const distSq = ex * ex + ez * ez;
   if (distSq >= actorRadius * actorRadius) return false;
 
+  let hasPrev = false;
+  let prevLx = lx;
+  let prevLz = lz;
+  if (prevX !== undefined && prevZ !== undefined) {
+    const pdx = prevX - boxCenterX;
+    const pdz = prevZ - boxCenterZ;
+    prevLx = pdx * cosY - pdz * sinY;
+    prevLz = pdx * sinY + pdz * cosY;
+    hasPrev = true;
+  }
+
   if (distSq > 1e-8) {
-    const dist = Math.sqrt(distSq);
-    const push = (actorRadius - dist) / dist;
-    lx += ex * push;
-    lz += ez * push;
+    let tunneled = false;
+    if (hasPrev) {
+      if (prevLx <= -boxHalfX && lx > 0) {
+        lx = -(boxHalfX + actorRadius);
+        tunneled = true;
+      } else if (prevLx >= boxHalfX && lx < 0) {
+        lx = boxHalfX + actorRadius;
+        tunneled = true;
+      } else if (prevLz <= -boxHalfZ && lz > 0) {
+        lz = -(boxHalfZ + actorRadius);
+        tunneled = true;
+      } else if (prevLz >= boxHalfZ && lz < 0) {
+        lz = boxHalfZ + actorRadius;
+        tunneled = true;
+      }
+    }
+    if (!tunneled) {
+      const dist = Math.sqrt(distSq);
+      const push = (actorRadius - dist) / dist;
+      lx += ex * push;
+      lz += ez * push;
+    }
   } else {
-    const penX = boxHalfX + actorRadius - Math.abs(lx);
-    const penZ = boxHalfZ + actorRadius - Math.abs(lz);
-    if (penX < penZ) lx = lx >= 0 ? boxHalfX + actorRadius : -(boxHalfX + actorRadius);
-    else lz = lz >= 0 ? boxHalfZ + actorRadius : -(boxHalfZ + actorRadius);
+    if (hasPrev) {
+      if (prevLx <= -boxHalfX) lx = -(boxHalfX + actorRadius);
+      else if (prevLx >= boxHalfX) lx = boxHalfX + actorRadius;
+      else if (prevLz <= -boxHalfZ) lz = -(boxHalfZ + actorRadius);
+      else if (prevLz >= boxHalfZ) lz = boxHalfZ + actorRadius;
+      else {
+        const penX = boxHalfX + actorRadius - Math.abs(lx);
+        const penZ = boxHalfZ + actorRadius - Math.abs(lz);
+        if (penX < penZ) lx = lx >= 0 ? boxHalfX + actorRadius : -(boxHalfX + actorRadius);
+        else lz = lz >= 0 ? boxHalfZ + actorRadius : -(boxHalfZ + actorRadius);
+      }
+    } else {
+      const penX = boxHalfX + actorRadius - Math.abs(lx);
+      const penZ = boxHalfZ + actorRadius - Math.abs(lz);
+      if (penX < penZ) lx = lx >= 0 ? boxHalfX + actorRadius : -(boxHalfX + actorRadius);
+      else lz = lz >= 0 ? boxHalfZ + actorRadius : -(boxHalfZ + actorRadius);
+    }
   }
 
   outPos.x = boxCenterX + lx * cosY + lz * sinY;

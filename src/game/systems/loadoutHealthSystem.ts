@@ -8,13 +8,13 @@ import {
   PrimaryFirearmSpec,
   SwordState,
   WeaponSlot,
-} from '../types/systems';
+} from "../types/systems";
 
 export const FACTION_PRIMARY_FIREARMS: Record<FactionId, PrimaryFirearmSpec> = {
   [FactionId.EAST]: {
-    id: 'ak205m-tac',
-    designation: 'AK-205M Kalashnikov Modernized Carbine',
-    caliber: '5.45x39mm 7N40 Enhanced Penetrator',
+    id: "ak205m-tac",
+    designation: "AK-205M Kalashnikov Modernized Carbine",
+    caliber: "5.45x39mm 7N40 Enhanced Penetrator",
     originFaction: FactionId.EAST,
     magazineCapacity: 30,
     initialReserveAmmo: 240,
@@ -28,9 +28,9 @@ export const FACTION_PRIMARY_FIREARMS: Record<FactionId, PrimaryFirearmSpec> = {
     effectiveRangeMeters: 500,
   },
   [FactionId.WEST]: {
-    id: 'mcx-spear-68',
-    designation: 'XM7 MCX-Spear NGSW Tactical Rifle',
-    caliber: '6.8x51mm (.277 Fury) Bimodal Hybrid',
+    id: "mcx-spear-68",
+    designation: "XM7 MCX-Spear NGSW Tactical Rifle",
+    caliber: "6.8x51mm (.277 Fury) Bimodal Hybrid",
     originFaction: FactionId.WEST,
     magazineCapacity: 25,
     initialReserveAmmo: 225,
@@ -47,9 +47,9 @@ export const FACTION_PRIMARY_FIREARMS: Record<FactionId, PrimaryFirearmSpec> = {
 
 export const FACTION_EMERGENCY_SWORDS: Record<FactionId, MeleeSwordSpec> = {
   [FactionId.EAST]: {
-    id: 'ratnik-wakizashi-98',
-    designation: 'Kizlyar Type-98 High-Carbon Tactical Blade',
-    steelGrade: 'CPM-3V Cryo-Tempered Tool Steel (60 HRC)',
+    id: "ratnik-wakizashi-98",
+    designation: "Kizlyar Type-98 High-Carbon Tactical Blade",
+    steelGrade: "CPM-3V Cryo-Tempered Tool Steel (60 HRC)",
     maxDurability: 100,
     durabilityLossPerHit: 1.25,
     slash1Damage: 58,
@@ -65,9 +65,9 @@ export const FACTION_EMERGENCY_SWORDS: Record<FactionId, MeleeSwordSpec> = {
     emergencyAutoDrawSec: 0.22,
   },
   [FactionId.WEST]: {
-    id: 'winkler-combat-saber',
-    designation: 'Winkler WK-II Close-Quarters Breach Saber',
-    steelGrade: '80CrV2 Black-Oxide Forged Carbon Steel',
+    id: "winkler-combat-saber",
+    designation: "Winkler WK-II Close-Quarters Breach Saber",
+    steelGrade: "80CrV2 Black-Oxide Forged Carbon Steel",
     maxDurability: 100,
     durabilityLossPerHit: 1.25,
     slash1Damage: 58,
@@ -85,8 +85,8 @@ export const FACTION_EMERGENCY_SWORDS: Record<FactionId, MeleeSwordSpec> = {
 };
 
 export const STANDARD_MEDICAL_GEAR: MedicalGearSpec = {
-  id: 'ifak-gen4-trauma',
-  designation: 'Gen-4 IFAK Hemostatic Auto-Injector & Chest Seal',
+  id: "ifak-gen4-trauma",
+  designation: "Gen-4 IFAK Hemostatic Auto-Injector & Chest Seal",
   initialCharges: 4,
   maxCharges: 6,
   instantHealHp: 45,
@@ -158,7 +158,7 @@ export function stepPlayerCombatStateMachine(
     switchSlotJustPressed: boolean;
     quickMeleeJustPressed: boolean;
     healJustPressed: boolean;
-  }
+  },
 ): CombatTickEvents {
   const gun = FACTION_PRIMARY_FIREARMS[faction];
   const sword = FACTION_EMERGENCY_SWORDS[faction];
@@ -183,7 +183,8 @@ export function stepPlayerCombatStateMachine(
 
   // 1. Standardized HP & Medical Kit State Machine
   if (state.regenRemainingHp > 0) {
-    const regenRate = STANDARD_MEDICAL_GEAR.regenOverTimeHp / STANDARD_MEDICAL_GEAR.regenDurationSec;
+    const regenRate =
+      STANDARD_MEDICAL_GEAR.regenOverTimeHp / STANDARD_MEDICAL_GEAR.regenDurationSec;
     const healStep = Math.min(state.regenRemainingHp, regenRate * dt);
     state.hp = Math.min(state.maxHp, state.hp + healStep);
     state.regenRemainingHp = Math.max(0, state.regenRemainingHp - healStep);
@@ -253,9 +254,7 @@ export function stepPlayerCombatStateMachine(
         state.reserveAmmo > 0
       ) {
         const isTactical = state.magazineAmmo > 0;
-        state.firearmState = isTactical
-          ? FirearmState.RELOAD_TACTICAL
-          : FirearmState.RELOAD_DRY;
+        state.firearmState = isTactical ? FirearmState.RELOAD_TACTICAL : FirearmState.RELOAD_DRY;
         state.reloadTimerSec = 0;
         state.reloadDurationSec = isTactical ? gun.tacticalReloadSec : gun.dryReloadSec;
         events.startedReload = true;
@@ -287,8 +286,7 @@ export function stepPlayerCombatStateMachine(
           events.autoDrewSword = true;
         }
       } else if (state.fireCooldownSec <= 0) {
-        state.firearmState =
-          state.magazineAmmo > 0 ? FirearmState.IDLE : FirearmState.DRY_EMPTY;
+        state.firearmState = state.magazineAmmo > 0 ? FirearmState.IDLE : FirearmState.DRY_EMPTY;
       }
     }
   }
@@ -413,7 +411,7 @@ export function stepPlayerCombatStateMachine(
 function equipSwordStance(
   state: PlayerCombatState,
   _sword: MeleeSwordSpec,
-  autoZeroAmmo: boolean
+  autoZeroAmmo: boolean,
 ): void {
   state.equippedSlot = WeaponSlot.EMERGENCY_SWORD;
   state.firearmState = FirearmState.HOLSTERED;
@@ -430,15 +428,14 @@ function equipFirearmSlot(state: PlayerCombatState): void {
   state.swordState = SwordState.SHEATHED;
   state.swordStateTimerSec = 0;
   state.comboQueuedNext = false;
-  state.firearmState =
-    state.magazineAmmo > 0 ? FirearmState.IDLE : FirearmState.DRY_EMPTY;
+  state.firearmState = state.magazineAmmo > 0 ? FirearmState.IDLE : FirearmState.DRY_EMPTY;
 }
 
 function beginSwordSwing(
   state: PlayerCombatState,
   step: 1 | 2 | 3,
   _sword: MeleeSwordSpec,
-  events: CombatTickEvents
+  events: CombatTickEvents,
 ): void {
   state.comboQueuedNext = false;
   state.swordStateTimerSec = 0;
@@ -452,7 +449,7 @@ function beginSwordSwing(
 export function applyIncomingPlayerDamage(
   state: PlayerCombatState,
   rawDamage: number,
-  armorPiercingFactor = 0.35
+  armorPiercingFactor = 0.35,
 ): number {
   if (state.hp <= 0) return 0;
 
@@ -470,10 +467,7 @@ export function applyIncomingPlayerDamage(
   return finalHpDamage;
 }
 
-export function computeSwordSwingDamage(
-  state: PlayerCombatState,
-  faction: FactionId
-): number {
+export function computeSwordSwingDamage(state: PlayerCombatState, faction: FactionId): number {
   const spec = FACTION_EMERGENCY_SWORDS[faction];
   // High-durability tempered steel maintains 100% edge lethality down to 15% durability, never shatters
   const edgeFactor = state.swordDurability > 15 ? 1.0 : 0.78;

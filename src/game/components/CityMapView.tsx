@@ -1,5 +1,5 @@
-import React, { useMemo, useRef } from 'react';
-import { BLOCK_SIZE, CITY_HALF_EXTENT, getCityLayout } from '../city/cityLayout';
+import React, { useMemo, useRef } from "react";
+import { BLOCK_SIZE, CITY_HALF_EXTENT, getCityLayout } from "../city/cityLayout";
 
 interface CityMapViewProps {
   playerCoords?: { x: number; z: number; yaw: number };
@@ -32,14 +32,15 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
   const destroyed = useMemo(() => new Set(destroyedBuildingIds), [destroyedBuildingIds]);
 
   const ext = CITY_HALF_EXTENT;
-  const view = compactMinimap && playerCoords
-    ? {
-        x: playerCoords.x - COMPACT_SPAN / 2,
-        y: playerCoords.z - COMPACT_SPAN / 2,
-        w: COMPACT_SPAN,
-        h: COMPACT_SPAN,
-      }
-    : { x: -ext, y: -ext, w: ext * 2, h: ext * 2 };
+  const view =
+    compactMinimap && playerCoords
+      ? {
+          x: playerCoords.x - COMPACT_SPAN / 2,
+          y: playerCoords.z - COMPACT_SPAN / 2,
+          w: COMPACT_SPAN,
+          h: COMPACT_SPAN,
+        }
+      : { x: -ext, y: -ext, w: ext * 2, h: ext * 2 };
   const k = compactMinimap ? 0.65 : 1; // marker scale
 
   const handleClick = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -47,7 +48,10 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
     const rect = svgRef.current.getBoundingClientRect();
     const nx = (e.clientX - rect.left) / rect.width;
     const nz = (e.clientY - rect.top) / rect.height;
-    onClickMapWorldPoint(Number((view.x + nx * view.w).toFixed(1)), Number((view.y + nz * view.h).toFixed(1)));
+    onClickMapWorldPoint(
+      Number((view.x + nx * view.w).toFixed(1)),
+      Number((view.y + nz * view.h).toFixed(1)),
+    );
   };
 
   return (
@@ -66,7 +70,7 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
             y={blk.cz - BLOCK_SIZE / 2}
             width={BLOCK_SIZE}
             height={BLOCK_SIZE}
-            fill={blk.kind === 'PARK' ? '#334028' : blk.kind === 'PLAZA' ? '#4d4a43' : '#3a3d42'}
+            fill={blk.kind === "PARK" ? "#334028" : blk.kind === "PLAZA" ? "#4d4a43" : "#3a3d42"}
             stroke="#4b5058"
             strokeWidth={0.6 * k}
           />
@@ -88,8 +92,16 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
       {layout.buildings.map((b) => {
         const isTarget = b.id === targetBuildingId;
         const isDestroyed = destroyed.has(b.id);
-        const isSafe = b.role === 'SAFEHOUSE';
-        const fill = isDestroyed ? '#5b2d2a' : isTarget ? '#b7791f' : isSafe ? '#1f6b4f' : b.isSpecial ? '#5e6672' : '#4c535c';
+        const isSafe = b.role === "SAFEHOUSE";
+        const fill = isDestroyed
+          ? "#5b2d2a"
+          : isTarget
+            ? "#b7791f"
+            : isSafe
+              ? "#1f6b4f"
+              : b.isSpecial
+                ? "#5e6672"
+                : "#4c535c";
         return (
           <g key={b.id}>
             <rect
@@ -98,7 +110,7 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
               width={b.footprint.maxX - b.footprint.minX}
               height={b.footprint.maxZ - b.footprint.minZ}
               fill={fill}
-              stroke={isTarget ? '#fbbf24' : '#1b1e22'}
+              stroke={isTarget ? "#fbbf24" : "#1b1e22"}
               strokeWidth={(isTarget ? 1.4 : 0.5) * k}
               strokeDasharray={isDestroyed ? `${2 * k} ${2 * k}` : undefined}
             />
@@ -107,13 +119,13 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
                 x={(b.footprint.minX + b.footprint.maxX) / 2}
                 y={b.footprint.minZ - 1.5}
                 textAnchor="middle"
-                fill={isTarget ? '#fde68a' : '#e2e8f0'}
+                fill={isTarget ? "#fde68a" : "#e2e8f0"}
                 fontSize="4"
                 fontFamily="monospace"
                 fontWeight="600"
-                style={{ paintOrder: 'stroke', stroke: '#0b0e13', strokeWidth: 1.4 }}
+                style={{ paintOrder: "stroke", stroke: "#0b0e13", strokeWidth: 1.4 }}
               >
-                {b.name.replace(' (Safehouse)', '')}
+                {b.name.replace(" (Safehouse)", "")}
               </text>
             )}
           </g>
@@ -121,11 +133,26 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
       })}
 
       {/* Grand Avenue */}
-      <line x1={-ext} y1={0} x2={ext} y2={0} stroke="#d6aa3c" strokeOpacity="0.45" strokeWidth={0.8 * k} strokeDasharray={`${4 * k} ${3 * k}`} />
+      <line
+        x1={-ext}
+        y1={0}
+        x2={ext}
+        y2={0}
+        stroke="#d6aa3c"
+        strokeOpacity="0.45"
+        strokeWidth={0.8 * k}
+        strokeDasharray={`${4 * k} ${3 * k}`}
+      />
 
       {squadTargetCoords && (
         <g transform={`translate(${squadTargetCoords.x}, ${squadTargetCoords.z})`}>
-          <circle r={5 * k} fill="none" stroke="#10b981" strokeWidth={1.1 * k} strokeDasharray={`${2 * k} ${2 * k}`} />
+          <circle
+            r={5 * k}
+            fill="none"
+            stroke="#10b981"
+            strokeWidth={1.1 * k}
+            strokeDasharray={`${2 * k} ${2 * k}`}
+          />
         </g>
       )}
 
@@ -160,9 +187,16 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
       )}
 
       {playerCoords && (
-        <g transform={`translate(${playerCoords.x}, ${playerCoords.z}) rotate(${(-playerCoords.yaw * 180) / Math.PI}) scale(${k})`}>
+        <g
+          transform={`translate(${playerCoords.x}, ${playerCoords.z}) rotate(${(-playerCoords.yaw * 180) / Math.PI}) scale(${k})`}
+        >
           <polygon points="0,0 -18,-30 18,-30" fill="rgba(56,189,248,0.16)" />
-          <polygon points="0,-8 5.5,6.5 0,3.2 -5.5,6.5" fill="#38bdf8" stroke="#090d14" strokeWidth="1.1" />
+          <polygon
+            points="0,-8 5.5,6.5 0,3.2 -5.5,6.5"
+            fill="#38bdf8"
+            stroke="#090d14"
+            strokeWidth="1.1"
+          />
         </g>
       )}
     </svg>

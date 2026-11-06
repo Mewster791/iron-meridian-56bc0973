@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   FactionId,
   PlayerCombatState,
@@ -7,34 +7,41 @@ import {
   SalvageInventory,
   SquadOrder,
   TacticalUnitVehicleState,
-} from '../types/systems';
-import { canAdvanceRetrofitStage } from '../systems/scavengeRetrofitSystem';
-import { ATMOSPHERE_CONFIGS, AtmospherePreset } from '../three/proceduralTextures';
-import { CityMapView } from './CityMapView';
-import { ACT_TITLES, LORE_DOSSIERS, MISSIONS } from '../campaign/campaignData';
+} from "../types/systems";
+import { canAdvanceRetrofitStage } from "../systems/scavengeRetrofitSystem";
+import { ATMOSPHERE_CONFIGS, AtmospherePreset } from "../three/proceduralTextures";
+import { CityMapView } from "./CityMapView";
+import { ACT_TITLES, LORE_DOSSIERS, MISSIONS } from "../campaign/campaignData";
 import {
   CampaignProgress,
   formatPlayTime,
   getCurrentMission,
   getStepBuilding,
   getStepWaypoint,
-} from '../campaign/campaignRules';
+} from "../campaign/campaignRules";
 import {
   BookOpen,
   CheckCircle2,
   Circle,
   Compass,
   Crosshair,
+  Download,
+  Headphones,
   Home,
   Keyboard,
+  Loader2,
   Shield,
+  Sparkles,
   Sun,
   Target,
+  Volume2,
+  VolumeX,
   Wrench,
   X,
-} from 'lucide-react';
+} from "lucide-react";
+import { SOUNDTRACK_TRACKS, SoundtrackId, musicEngine } from "../systems/musicEngine";
 
-type PlayerMenuTab = 'MAP_AND_MISSION' | 'JOURNAL' | 'UPGRADES' | 'CONTROLS';
+type PlayerMenuTab = "MAP_AND_MISSION" | "JOURNAL" | "UPGRADES" | "SOUNDTRACK" | "CONTROLS";
 
 interface TacticalMenuOverlayProps {
   isOpen: boolean;
@@ -58,10 +65,10 @@ interface TacticalMenuOverlayProps {
 }
 
 const SQUAD_ORDER_LABELS: Record<SquadOrder, string> = {
-  [SquadOrder.FOLLOW_WEDGE]: 'Follow Operator',
-  [SquadOrder.HOLD_OVERWATCH]: 'Hold Position',
-  [SquadOrder.ASSAULT_CONVOY]: 'Assault Convoy',
-  [SquadOrder.SUPPRESS_SECTOR]: 'Move to Map Point',
+  [SquadOrder.FOLLOW_WEDGE]: "Follow Operator",
+  [SquadOrder.HOLD_OVERWATCH]: "Hold Position",
+  [SquadOrder.ASSAULT_CONVOY]: "Assault Convoy",
+  [SquadOrder.SUPPRESS_SECTOR]: "Move to Map Point",
 };
 
 export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
@@ -84,7 +91,36 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
   onAdvanceTechNode,
   onSetSquadOrder,
 }) => {
-  const [subTab, setSubTab] = useState<PlayerMenuTab>('MAP_AND_MISSION');
+  const [subTab, setSubTab] = useState<PlayerMenuTab>("MAP_AND_MISSION");
+  const [activeTrack, setActiveTrack] = useState<SoundtrackId>(() => musicEngine.getActiveTrack());
+  const [isMuted, setIsMuted] = useState<boolean>(() => musicEngine.isMuted());
+  const [downloadingTrack, setDownloadingTrack] = useState<SoundtrackId | null>(null);
+  const [downloadSuccess, setDownloadSuccess] = useState<SoundtrackId | null>(null);
+
+  const handleSelectTrack = (trackId: SoundtrackId) => {
+    musicEngine.setActiveTrack(trackId);
+    setActiveTrack(trackId);
+  };
+
+  const handleToggleMute = () => {
+    const next = !musicEngine.isMuted();
+    musicEngine.setMuted(next);
+    setIsMuted(next);
+  };
+
+  const handleDownloadTrack = async (trackId: SoundtrackId, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDownloadingTrack(trackId);
+    try {
+      await musicEngine.downloadTrack(trackId);
+      setDownloadSuccess(trackId);
+      window.setTimeout(() => setDownloadSuccess(null), 3500);
+    } catch (err) {
+      console.error("Download failed", err);
+    } finally {
+      setDownloadingTrack(null);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -92,12 +128,14 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
   const step = mission ? mission.steps[campaign.stepIndex] : null;
   const waypoint = getStepWaypoint(step);
   const targetBuilding = getStepBuilding(step);
-  const waypointDist = waypoint ? Math.round(Math.hypot(waypoint.x - playerCoords.x, waypoint.z - playerCoords.z)) : 0;
+  const waypointDist = waypoint
+    ? Math.round(Math.hypot(waypoint.x - playerCoords.x, waypoint.z - playerCoords.z))
+    : 0;
 
   const readyUpgradeCount = techNodes.filter(
     (n) =>
       n.stage !== RetrofitStage.FIELD_RETROFITTED &&
-      canAdvanceRetrofitStage(n, techNodes, salvageInventory).allowed
+      canAdvanceRetrofitStage(n, techNodes, salvageInventory).allowed,
   ).length;
 
   const eraCount =
@@ -106,10 +144,20 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
       : salvageInventory.easternEraBlocks;
 
   const tabs: Array<{ id: PlayerMenuTab; label: string }> = [
-    { id: 'MAP_AND_MISSION', label: `Map & Mission (${campaign.completedMissionIds.length}/${MISSIONS.length})` },
-    { id: 'JOURNAL', label: `Journal (${campaign.dossiersFound.length}/${LORE_DOSSIERS.length} dossiers)` },
-    { id: 'UPGRADES', label: `Upgrades${readyUpgradeCount > 0 ? ` (${readyUpgradeCount} Ready)` : ''}` },
-    { id: 'CONTROLS', label: 'Controls' },
+    {
+      id: "MAP_AND_MISSION",
+      label: `Map & Mission (${campaign.completedMissionIds.length}/${MISSIONS.length})`,
+    },
+    {
+      id: "JOURNAL",
+      label: `Journal (${campaign.dossiersFound.length}/${LORE_DOSSIERS.length} dossiers)`,
+    },
+    {
+      id: "UPGRADES",
+      label: `Upgrades${readyUpgradeCount > 0 ? ` (${readyUpgradeCount} Ready)` : ""}`,
+    },
+    { id: "SOUNDTRACK", label: "Soundtrack" },
+    { id: "CONTROLS", label: "Controls" },
   ];
 
   return (
@@ -128,7 +176,9 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
                 type="button"
                 onClick={() => setSubTab(t.id)}
                 className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                  subTab === t.id ? 'bg-[#F59E0B] text-slate-950 font-semibold' : 'text-slate-300 hover:text-white'
+                  subTab === t.id
+                    ? "bg-[#F59E0B] text-slate-950 font-semibold"
+                    : "text-slate-300 hover:text-white"
                 }`}
               >
                 {t.label}
@@ -160,7 +210,7 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
 
       {/* Menu Body */}
       <div className="flex-1 overflow-y-auto p-5 md:p-6">
-        {subTab === 'MAP_AND_MISSION' && (
+        {subTab === "MAP_AND_MISSION" && (
           <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
             <div className="lg:col-span-7 bg-[#11161F] border border-slate-800 rounded-xl p-4 flex flex-col space-y-3">
               <div className="font-semibold text-white flex items-center gap-2 text-xs">
@@ -193,7 +243,9 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
                       <Target className="w-4 h-4" />
                       {ACT_TITLES[mission.act].title.toUpperCase()} · MISSION {mission.number}
                     </span>
-                    {waypoint && <span className="text-sky-300 tabular-nums">{waypointDist}m away</span>}
+                    {waypoint && (
+                      <span className="text-sky-300 tabular-nums">{waypointDist}m away</span>
+                    )}
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-white leading-snug">{mission.title}</h2>
@@ -211,16 +263,21 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
                       return (
                         <li
                           key={`${s.type}-${i}`}
-                          className={`flex items-start gap-2 ${done ? 'text-emerald-400' : current ? 'text-white font-semibold' : 'text-slate-500'}`}
+                          className={`flex items-start gap-2 ${done ? "text-emerald-400" : current ? "text-white font-semibold" : "text-slate-500"}`}
                         >
-                          {done ? <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" /> : <Circle className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+                          {done ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                          ) : (
+                            <Circle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                          )}
                           <span>{s.text}</span>
                         </li>
                       );
                     })}
                   </ol>
                   <div className="text-[#F59E0B] font-mono text-xs tabular-nums pt-1 border-t border-slate-800">
-                    Reward: +{mission.reward.scrap} alloy · +{mission.reward.plates} plates · +{mission.reward.chips} chips
+                    Reward: +{mission.reward.scrap} alloy · +{mission.reward.plates} plates · +
+                    {mission.reward.chips} chips
                   </div>
                   {waypoint && (
                     <button
@@ -236,7 +293,9 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
               ) : (
                 <div className="bg-[#11161F] border-2 border-emerald-500/70 rounded-xl p-5 space-y-2">
                   <h2 className="text-xl font-bold text-white">Campaign complete</h2>
-                  <p className="text-xs text-slate-300">Varos-Meridian is free. You can keep exploring, looting and upgrading.</p>
+                  <p className="text-xs text-slate-300">
+                    Varos-Meridian is free. You can keep exploring, looting and upgrading.
+                  </p>
                 </div>
               )}
 
@@ -255,8 +314,8 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
                       onClick={() => onSetSquadOrder(ord)}
                       className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left cursor-pointer ${
                         vehicleState.currentOrder === ord
-                          ? 'bg-emerald-600 text-white font-semibold'
-                          : 'bg-[#0B0E13] text-slate-300 hover:bg-slate-800'
+                          ? "bg-emerald-600 text-white font-semibold"
+                          : "bg-[#0B0E13] text-slate-300 hover:bg-slate-800"
                       }`}
                     >
                       {SQUAD_ORDER_LABELS[ord]}
@@ -268,7 +327,9 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
               <div className="bg-[#11161F] border border-slate-800 rounded-xl p-4 grid grid-cols-3 gap-3 text-xs font-mono tabular-nums">
                 <div>
                   <div className="text-slate-400">Time played</div>
-                  <div className="text-white font-semibold mt-0.5">{formatPlayTime(campaign.playTimeSec)}</div>
+                  <div className="text-white font-semibold mt-0.5">
+                    {formatPlayTime(campaign.playTimeSec)}
+                  </div>
                 </div>
                 <div>
                   <div className="text-slate-400">Times down</div>
@@ -283,7 +344,7 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
           </div>
         )}
 
-        {subTab === 'JOURNAL' && (
+        {subTab === "JOURNAL" && (
           <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-[#11161F] border border-slate-800 rounded-xl p-5 space-y-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -297,12 +358,21 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
                     const done = campaign.completedMissionIds.includes(m.id);
                     const current = mission?.id === m.id;
                     return (
-                      <div key={m.id} className={`text-xs ${done ? 'text-slate-300' : current ? 'text-white font-semibold' : 'text-slate-600'}`}>
+                      <div
+                        key={m.id}
+                        className={`text-xs ${done ? "text-slate-300" : current ? "text-white font-semibold" : "text-slate-600"}`}
+                      >
                         <div>
-                          {m.number}. {done || current ? m.title : '???'}
-                          {current && <span className="text-[#F59E0B] font-mono"> · in progress</span>}
+                          {m.number}. {done || current ? m.title : "???"}
+                          {current && (
+                            <span className="text-[#F59E0B] font-mono"> · in progress</span>
+                          )}
                         </div>
-                        {done && <div className="text-[11px] text-slate-500 leading-relaxed">{m.outro}</div>}
+                        {done && (
+                          <div className="text-[11px] text-slate-500 leading-relaxed">
+                            {m.outro}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -311,13 +381,23 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
             </div>
             <div className="bg-[#11161F] border border-slate-800 rounded-xl p-5 space-y-3">
               <div className="text-sm font-semibold text-white">Dossiers found in the city</div>
-              <p className="text-[11px] text-slate-400">Gold document cases are hidden in buildings across Varos-Meridian.</p>
+              <p className="text-[11px] text-slate-400">
+                Gold document cases are hidden in buildings across Varos-Meridian.
+              </p>
               {LORE_DOSSIERS.map((doc) => {
                 const found = campaign.dossiersFound.includes(doc.id);
                 return (
                   <div key={doc.id} className="p-3 rounded-lg bg-[#0B0E13] border border-slate-800">
-                    <div className={`text-xs font-semibold ${found ? 'text-white' : 'text-slate-600'}`}>{found ? doc.title : 'Undiscovered dossier'}</div>
-                    {found && <div className="text-[11px] text-slate-400 mt-1 leading-relaxed">{doc.text}</div>}
+                    <div
+                      className={`text-xs font-semibold ${found ? "text-white" : "text-slate-600"}`}
+                    >
+                      {found ? doc.title : "Undiscovered dossier"}
+                    </div>
+                    {found && (
+                      <div className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                        {doc.text}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -325,7 +405,7 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
           </div>
         )}
 
-        {subTab === 'UPGRADES' && (
+        {subTab === "UPGRADES" && (
           <div className="max-w-5xl mx-auto space-y-6">
             {/* Salvage Materials Header */}
             <div className="bg-[#11161F] border border-slate-800 rounded-xl p-5 grid grid-cols-2 md:grid-cols-4 gap-4 font-mono text-xs tabular-nums">
@@ -363,10 +443,10 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
                     key={node.id}
                     className={`bg-[#11161F] border rounded-xl p-5 flex flex-col justify-between space-y-4 ${
                       installed
-                        ? 'border-emerald-500/60'
+                        ? "border-emerald-500/60"
                         : check.allowed
-                          ? 'border-[#F59E0B]/70'
-                          : 'border-slate-800'
+                          ? "border-[#F59E0B]/70"
+                          : "border-slate-800"
                     }`}
                   >
                     <div className="space-y-1.5">
@@ -375,17 +455,17 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
                         <span
                           className={
                             installed
-                              ? 'text-emerald-400 font-semibold'
+                              ? "text-emerald-400 font-semibold"
                               : check.allowed
-                                ? 'text-[#F59E0B] font-semibold'
-                                : 'text-slate-500'
+                                ? "text-[#F59E0B] font-semibold"
+                                : "text-slate-500"
                           }
                         >
                           {installed
-                            ? 'EQUIPPED'
+                            ? "EQUIPPED"
                             : node.stage === RetrofitStage.LOCKED_UNSEEN
-                              ? 'LOOT CONVOYS TO UNLOCK'
-                              : 'IN PROGRESS'}
+                              ? "LOOT CONVOYS TO UNLOCK"
+                              : "IN PROGRESS"}
                         </span>
                       </div>
                       <h3 className="text-lg font-semibold text-white">{node.name}</h3>
@@ -394,13 +474,13 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
                           `+${node.statModifiers.vehicleMaxArmorBonus} APC Armor Health · `}
                         {node.statModifiers.shapedChargeMitigationBonus > 0 &&
                           `+${Math.round(
-                            node.statModifiers.shapedChargeMitigationBonus * 100
+                            node.statModifiers.shapedChargeMitigationBonus * 100,
                           )}% Blast Resistance · `}
                         {node.statModifiers.apsInterceptCharges > 0 &&
                           `+${node.statModifiers.apsInterceptCharges} Active Defense Charges · `}
                         {node.statModifiers.squadFirepowerMultiplier > 1 &&
                           `+${Math.round(
-                            (node.statModifiers.squadFirepowerMultiplier - 1) * 100
+                            (node.statModifiers.squadFirepowerMultiplier - 1) * 100,
                           )}% Squad Firepower · `}
                         {node.sourceDescription}
                       </p>
@@ -408,7 +488,7 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
 
                     <div className="flex items-center justify-between pt-3 border-t border-slate-800 text-xs font-mono tabular-nums">
                       <span className="text-slate-300">
-                        Cost: {node.costScrapAlloy} Alloy · {node.costArmorUnits} Plates ·{' '}
+                        Cost: {node.costScrapAlloy} Alloy · {node.costArmorUnits} Plates ·{" "}
                         {node.costControlChips} Chips
                       </span>
                       <button
@@ -417,10 +497,10 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
                         onClick={() => onAdvanceTechNode(node.id)}
                         className={`px-3.5 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition-colors ${
                           installed
-                            ? 'bg-emerald-950/70 text-emerald-300 cursor-default'
+                            ? "bg-emerald-950/70 text-emerald-300 cursor-default"
                             : check.allowed
-                              ? 'bg-[#F59E0B] text-slate-950 hover:bg-amber-400 cursor-pointer'
-                              : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                              ? "bg-[#F59E0B] text-slate-950 hover:bg-amber-400 cursor-pointer"
+                              : "bg-slate-800 text-slate-500 cursor-not-allowed"
                         }`}
                       >
                         {installed ? (
@@ -430,12 +510,12 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
                         )}
                         <span>
                           {installed
-                            ? 'Installed'
+                            ? "Installed"
                             : check.allowed
                               ? node.stage === RetrofitStage.ADAPTER_FABRICATED
-                                ? 'Equip Upgrade'
-                                : 'Upgrade Step'
-                              : 'Need Salvage'}
+                                ? "Equip Upgrade"
+                                : "Upgrade Step"
+                              : "Need Salvage"}
                         </span>
                       </button>
                     </div>
@@ -446,7 +526,7 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
           </div>
         )}
 
-        {subTab === 'CONTROLS' && (
+        {subTab === "CONTROLS" && (
           <div className="max-w-4xl mx-auto space-y-6">
             <div className="bg-[#11161F] border border-slate-800 rounded-xl p-6 space-y-4">
               <div className="flex items-center gap-2 text-base font-semibold text-white">
@@ -488,7 +568,9 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
                   <span className="text-[#F59E0B]">4 ({playerState.medkitsRemaining} left)</span>
                 </div>
                 <div className="flex justify-between px-3.5 py-2.5 rounded-lg bg-[#0B0E13] border border-slate-800">
-                  <span className="text-slate-300 font-sans">Search crates · rest · APC (hold to plant / download)</span>
+                  <span className="text-slate-300 font-sans">
+                    Search crates · rest · APC (hold to plant / download)
+                  </span>
                   <span className="text-[#F59E0B]">E</span>
                 </div>
                 <div className="flex justify-between px-3.5 py-2.5 rounded-lg bg-[#0B0E13] border border-slate-800">
@@ -516,13 +598,134 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
                     onClick={() => onChangeAtmosphere(preset)}
                     className={`px-3.5 py-2.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
                       atmosphere === preset
-                        ? 'bg-[#F59E0B] text-slate-950 border-[#F59E0B]'
-                        : 'bg-[#0B0E13] text-slate-300 border-slate-800 hover:border-slate-600'
+                        ? "bg-[#F59E0B] text-slate-950 border-[#F59E0B]"
+                        : "bg-[#0B0E13] text-slate-300 border-slate-800 hover:border-slate-600"
                     }`}
                   >
                     {ATMOSPHERE_CONFIGS[preset].label}
                   </button>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab: SOUNDTRACK */}
+        {subTab === "SOUNDTRACK" && (
+          <div className="max-w-4xl mx-auto space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+              <div>
+                <div className="text-xs font-mono uppercase tracking-widest text-[#F59E0B]">
+                  Audio Control &amp; Master Tracks
+                </div>
+                <h2 className="font-display text-2xl font-bold tracking-wide text-white uppercase">
+                  Varos-Meridian Soundtrack
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleToggleMute}
+                className="px-4 py-2 rounded-lg bg-[#141C27] hover:bg-slate-800 border border-slate-700 text-xs font-semibold text-white flex items-center gap-2 transition-colors cursor-pointer"
+              >
+                {isMuted ? (
+                  <>
+                    <VolumeX className="w-4 h-4 text-red-400" />
+                    <span>Music Muted (Turn On)</span>
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="w-4 h-4 text-[#F59E0B]" />
+                    <span>Music Active (Mute)</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="text-xs text-slate-400">
+                Switch active soundtrack version on the fly or download high-fidelity audio files to
+                your device for offline listening.
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {SOUNDTRACK_TRACKS.map((t) => {
+                  const isPlaying = activeTrack === t.id;
+                  const isDownloading = downloadingTrack === t.id;
+                  const isSuccess = downloadSuccess === t.id;
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => handleSelectTrack(t.id)}
+                      className={`relative p-5 rounded-xl border text-left cursor-pointer transition-all flex flex-col justify-between gap-4 ${
+                        isPlaying
+                          ? "border-[#F59E0B] bg-[#141C27] shadow-xl shadow-amber-950/20"
+                          : "border-slate-800 bg-[#0D1219] hover:border-slate-700"
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase ${
+                              isPlaying
+                                ? "bg-[#F59E0B] text-slate-950"
+                                : "bg-slate-800 text-slate-400"
+                            }`}
+                          >
+                            {t.version}
+                          </span>
+                          <span className="text-xs font-mono text-slate-400">{t.format}</span>
+                        </div>
+                        <div className="text-sm font-bold text-white tracking-wide">{t.title}</div>
+                        <p className="text-xs text-slate-400 leading-relaxed">{t.description}</p>
+                      </div>
+
+                      <div className="space-y-3 pt-3 border-t border-slate-800/80">
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`text-xs font-mono font-medium flex items-center gap-1.5 ${
+                              isPlaying ? "text-[#F59E0B]" : "text-slate-400"
+                            }`}
+                          >
+                            {isPlaying && (
+                              <span className="inline-block w-2 h-2 rounded-full bg-[#F59E0B] animate-pulse" />
+                            )}
+                            {isPlaying ? "NOW PLAYING" : "CLICK TO PLAY"}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handleDownloadTrack(t.id, e)}
+                          disabled={isDownloading}
+                          title={`Download ${t.title} (${t.format})`}
+                          className="w-full py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 text-xs font-mono flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-60"
+                        >
+                          {isDownloading ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#F59E0B]" />
+                              <span>
+                                {t.id === "iron-bow-original"
+                                  ? "Rendering WAV..."
+                                  : "Downloading..."}
+                              </span>
+                            </>
+                          ) : isSuccess ? (
+                            <>
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                              <span className="text-emerald-400">Downloaded to device!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Download {t.format}</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

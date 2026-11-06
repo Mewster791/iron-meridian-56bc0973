@@ -1,9 +1,13 @@
 import type {
-  FactionId, PlayerCombatState, TacticalUnitVehicleState, SalvageInventory, RetrofitTechNode,
-} from '../types/systems';
-import type { CampaignProgress } from '../campaign/campaignRules';
+  FactionId,
+  PlayerCombatState,
+  TacticalUnitVehicleState,
+  SalvageInventory,
+  RetrofitTechNode,
+} from "../types/systems";
+import type { CampaignProgress } from "../campaign/campaignRules";
 
-export const CAMPAIGN_SAVE_KEY = 'iron-meridian.campaign.v3';
+export const CAMPAIGN_SAVE_KEY = "iron-meridian.campaign.v3";
 
 export interface CampaignSave {
   version: 3;
@@ -17,11 +21,13 @@ export interface CampaignSave {
   playerCoords: { x: number; z: number; y: number; yaw: number };
 }
 
-export type CampaignSaveInput = Omit<CampaignSave, 'version' | 'savedAt'>;
+export type CampaignSaveInput = Omit<CampaignSave, "version" | "savedAt">;
 
 export function isValidCampaignSave(value: unknown): value is CampaignSave {
   const v = value as CampaignSave | null;
-  return !!v && v.version === 3 && !!v.playerState && !!v.progress && Array.isArray(v.progress.lootedIds);
+  return (
+    !!v && v.version === 3 && !!v.playerState && !!v.progress && Array.isArray(v.progress.lootedIds)
+  );
 }
 
 export function readCampaignSave(): CampaignSave | null {

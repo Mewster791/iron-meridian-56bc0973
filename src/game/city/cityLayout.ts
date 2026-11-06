@@ -22,23 +22,23 @@ const CORE_WIDTH = 2.6;
 const RAMP_LENGTH = 7.2;
 
 export type BuildingRole =
-  | 'SAFEHOUSE'
-  | 'PRECINCT'
-  | 'POST_OFFICE'
-  | 'BROADCAST'
-  | 'HOSPITAL'
-  | 'RECORDS'
-  | 'HOTEL'
-  | 'SUBSTATION'
-  | 'GARAGE'
-  | 'COURTHOUSE'
-  | 'BANK'
-  | 'TOWER'
-  | 'APARTMENT'
-  | 'OFFICE'
-  | 'SHOPS';
+  | "SAFEHOUSE"
+  | "PRECINCT"
+  | "POST_OFFICE"
+  | "BROADCAST"
+  | "HOSPITAL"
+  | "RECORDS"
+  | "HOTEL"
+  | "SUBSTATION"
+  | "GARAGE"
+  | "COURTHOUSE"
+  | "BANK"
+  | "TOWER"
+  | "APARTMENT"
+  | "OFFICE"
+  | "SHOPS";
 
-export type LootKind = 'AMMO' | 'MEDKIT' | 'SALVAGE' | 'ARMOR' | 'DOSSIER';
+export type LootKind = "AMMO" | "MEDKIT" | "SALVAGE" | "ARMOR" | "DOSSIER";
 
 export interface Rect {
   minX: number;
@@ -63,7 +63,7 @@ export interface WallBox {
   sz: number;
   y0: number;
   y1: number;
-  kind: 'EXTERIOR' | 'INTERIOR' | 'CORE';
+  kind: "EXTERIOR" | "INTERIOR" | "CORE";
 }
 
 export interface Building {
@@ -75,7 +75,7 @@ export interface Building {
   floors: number;
   /** Stair core rectangle (inner clear area). Ramps run +Z from minZ to maxZ. */
   core: Rect;
-  doorSide: 'N' | 'S';
+  doorSide: "N" | "S";
   doorX: number;
   /** Rooms per floor (inner rects) used for enemy patrols and loot. */
   rooms: Rect[];
@@ -90,7 +90,7 @@ export interface CityBlock {
   j: number;
   cx: number;
   cz: number;
-  kind: 'BUILDINGS' | 'PLAZA' | 'PARK';
+  kind: "BUILDINGS" | "PLAZA" | "PARK";
   name?: string;
 }
 
@@ -132,30 +132,142 @@ interface SpecialSpec {
 
 /** Fixed story locations. Grid: i = west→east, j = north→south. */
 export const SPECIAL_BUILDINGS: ReadonlyArray<SpecialSpec> = [
-  { i: 0, j: 5, id: 'safehouse', name: 'Kestrel Row Apartments (Safehouse)', role: 'SAFEHOUSE', w: 22, d: 18, floors: 3 },
-  { i: 2, j: 5, id: 'post', name: 'Central Post & Telegraph', role: 'POST_OFFICE', w: 30, d: 22, floors: 2 },
-  { i: 1, j: 4, id: 'precinct', name: '9th Precinct Station', role: 'PRECINCT', w: 28, d: 26, floors: 3 },
-  { i: 4, j: 4, id: 'hospital', name: 'St. Aurel General Hospital', role: 'HOSPITAL', w: 32, d: 30, floors: 5 },
-  { i: 2, j: 3, id: 'records', name: 'Municipal Records Hall', role: 'RECORDS', w: 28, d: 24, floors: 3 },
-  { i: 3, j: 3, id: 'courthouse', name: 'Varos Hall of Justice', role: 'COURTHOUSE', w: 32, d: 28, floors: 4 },
-  { i: 5, j: 3, id: 'substation', name: 'Varos East Power Substation', role: 'SUBSTATION', w: 26, d: 20, floors: 2 },
-  { i: 0, j: 2, id: 'broadcast', name: 'Meridian Broadcast House', role: 'BROADCAST', w: 24, d: 22, floors: 5 },
-  { i: 2, j: 2, id: 'bank', name: 'Meridian Reserve Bank', role: 'BANK', w: 32, d: 28, floors: 3 },
-  { i: 1, j: 1, id: 'garage', name: 'Ostrava Parking Structure', role: 'GARAGE', w: 32, d: 30, floors: 4 },
-  { i: 3, j: 1, id: 'hotel', name: 'Hotel Imperial', role: 'HOTEL', w: 26, d: 24, floors: 7 },
-  { i: 3, j: 0, id: 'tower', name: 'Ashgrove Consortium Tower', role: 'TOWER', w: 26, d: 26, floors: 9 },
+  {
+    i: 0,
+    j: 5,
+    id: "safehouse",
+    name: "Kestrel Row Apartments (Safehouse)",
+    role: "SAFEHOUSE",
+    w: 22,
+    d: 18,
+    floors: 3,
+  },
+  {
+    i: 2,
+    j: 5,
+    id: "post",
+    name: "Central Post & Telegraph",
+    role: "POST_OFFICE",
+    w: 30,
+    d: 22,
+    floors: 2,
+  },
+  {
+    i: 1,
+    j: 4,
+    id: "precinct",
+    name: "9th Precinct Station",
+    role: "PRECINCT",
+    w: 28,
+    d: 26,
+    floors: 3,
+  },
+  {
+    i: 4,
+    j: 4,
+    id: "hospital",
+    name: "St. Aurel General Hospital",
+    role: "HOSPITAL",
+    w: 32,
+    d: 30,
+    floors: 5,
+  },
+  {
+    i: 2,
+    j: 3,
+    id: "records",
+    name: "Municipal Records Hall",
+    role: "RECORDS",
+    w: 28,
+    d: 24,
+    floors: 3,
+  },
+  {
+    i: 3,
+    j: 3,
+    id: "courthouse",
+    name: "Varos Hall of Justice",
+    role: "COURTHOUSE",
+    w: 32,
+    d: 28,
+    floors: 4,
+  },
+  {
+    i: 5,
+    j: 3,
+    id: "substation",
+    name: "Varos East Power Substation",
+    role: "SUBSTATION",
+    w: 26,
+    d: 20,
+    floors: 2,
+  },
+  {
+    i: 0,
+    j: 2,
+    id: "broadcast",
+    name: "Meridian Broadcast House",
+    role: "BROADCAST",
+    w: 24,
+    d: 22,
+    floors: 5,
+  },
+  { i: 2, j: 2, id: "bank", name: "Meridian Reserve Bank", role: "BANK", w: 32, d: 28, floors: 3 },
+  {
+    i: 1,
+    j: 1,
+    id: "garage",
+    name: "Ostrava Parking Structure",
+    role: "GARAGE",
+    w: 32,
+    d: 30,
+    floors: 4,
+  },
+  { i: 3, j: 1, id: "hotel", name: "Hotel Imperial", role: "HOTEL", w: 26, d: 24, floors: 7 },
+  {
+    i: 3,
+    j: 0,
+    id: "tower",
+    name: "Ashgrove Consortium Tower",
+    role: "TOWER",
+    w: 26,
+    d: 26,
+    floors: 9,
+  },
 ];
 
-const OPEN_BLOCKS: ReadonlyArray<{ i: number; j: number; kind: 'PLAZA' | 'PARK'; name: string }> = [
-  { i: 3, j: 2, kind: 'PLAZA', name: 'Liberty Plaza' },
-  { i: 0, j: 0, kind: 'PARK', name: 'Northgate Park' },
-  { i: 5, j: 0, kind: 'PARK', name: 'Old Fortress Green' },
+const OPEN_BLOCKS: ReadonlyArray<{ i: number; j: number; kind: "PLAZA" | "PARK"; name: string }> = [
+  { i: 3, j: 2, kind: "PLAZA", name: "Liberty Plaza" },
+  { i: 0, j: 0, kind: "PARK", name: "Northgate Park" },
+  { i: 5, j: 0, kind: "PARK", name: "Old Fortress Green" },
 ];
 
-const GENERIC_NAMES: Record<'APARTMENT' | 'OFFICE' | 'SHOPS', string[]> = {
-  APARTMENT: ['Linden Flats', 'Morava Tenements', 'Harbor Court', 'Sokol House', 'Brightwater Flats', 'Vesna Block', 'Iron Lane Flats', 'Corvin Residences'],
-  OFFICE: ['Halvard Trading Co.', 'Danube Insurance', 'Pellar Shipping Office', 'Grey Ledger Offices', 'Union Telegraph Annex', 'Steelmark Offices'],
-  SHOPS: ['Market Arcade', 'Old Town Shops', 'Kovac Department Store', 'Cannery Row Stores', 'Tram Depot Shops'],
+const GENERIC_NAMES: Record<"APARTMENT" | "OFFICE" | "SHOPS", string[]> = {
+  APARTMENT: [
+    "Linden Flats",
+    "Morava Tenements",
+    "Harbor Court",
+    "Sokol House",
+    "Brightwater Flats",
+    "Vesna Block",
+    "Iron Lane Flats",
+    "Corvin Residences",
+  ],
+  OFFICE: [
+    "Halvard Trading Co.",
+    "Danube Insurance",
+    "Pellar Shipping Office",
+    "Grey Ledger Offices",
+    "Union Telegraph Annex",
+    "Steelmark Offices",
+  ],
+  SHOPS: [
+    "Market Arcade",
+    "Old Town Shops",
+    "Kovac Department Store",
+    "Cannery Row Stores",
+    "Tram Depot Shops",
+  ],
 };
 
 function rectContains(r: Rect, x: number, z: number, pad = 0): boolean {
@@ -176,11 +288,16 @@ function buildBuilding(
   w: number,
   d: number,
   floors: number,
-  doorSide: 'N' | 'S',
+  doorSide: "N" | "S",
   rng: () => number,
-  isSpecial: boolean
+  isSpecial: boolean,
 ): Building {
-  const footprint: Rect = { minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2 };
+  const footprint: Rect = {
+    minX: cx - w / 2,
+    maxX: cx + w / 2,
+    minZ: cz - d / 2,
+    maxZ: cz + d / 2,
+  };
   const t = WALL_THICKNESS;
   const H = FLOOR_HEIGHT;
   const walls: WallBox[] = [];
@@ -226,16 +343,40 @@ function buildBuilding(
       const a = op.c - op.width / 2;
       const b = op.c + op.width / 2;
       if (a - cursor > 0.05) {
-        walls.push({ cx: (cursor + a) / 2, cz: z, sx: a - cursor, sz: t, y0, y1: y0 + H, kind: 'EXTERIOR' });
+        walls.push({
+          cx: (cursor + a) / 2,
+          cz: z,
+          sx: a - cursor,
+          sz: t,
+          y0,
+          y1: y0 + H,
+          kind: "EXTERIOR",
+        });
       }
       if (!op.door) {
-        walls.push({ cx: op.c, cz: z, sx: op.width, sz: t, y0, y1: y0 + sill, kind: 'EXTERIOR' });
+        walls.push({ cx: op.c, cz: z, sx: op.width, sz: t, y0, y1: y0 + sill, kind: "EXTERIOR" });
       }
-      walls.push({ cx: op.c, cz: z, sx: op.width, sz: t, y0: y0 + (op.door ? 2.7 : lintel), y1: y0 + H, kind: 'EXTERIOR' });
+      walls.push({
+        cx: op.c,
+        cz: z,
+        sx: op.width,
+        sz: t,
+        y0: y0 + (op.door ? 2.7 : lintel),
+        y1: y0 + H,
+        kind: "EXTERIOR",
+      });
       cursor = b;
     }
     if (footprint.maxX - cursor > 0.05) {
-      walls.push({ cx: (cursor + footprint.maxX) / 2, cz: z, sx: footprint.maxX - cursor, sz: t, y0, y1: y0 + H, kind: 'EXTERIOR' });
+      walls.push({
+        cx: (cursor + footprint.maxX) / 2,
+        cz: z,
+        sx: footprint.maxX - cursor,
+        sz: t,
+        y0,
+        y1: y0 + H,
+        kind: "EXTERIOR",
+      });
     }
   };
 
@@ -245,7 +386,15 @@ function buildBuilding(
     const minZ = footprint.minZ + t;
     const maxZ = footprint.maxZ - t;
     if (!windows) {
-      walls.push({ cx: x, cz: (minZ + maxZ) / 2, sx: t, sz: maxZ - minZ, y0, y1: y0 + H, kind: 'EXTERIOR' });
+      walls.push({
+        cx: x,
+        cz: (minZ + maxZ) / 2,
+        sx: t,
+        sz: maxZ - minZ,
+        y0,
+        y1: y0 + H,
+        kind: "EXTERIOR",
+      });
       return;
     }
     const len = maxZ - minZ;
@@ -255,36 +404,80 @@ function buildBuilding(
       const c = minZ + (len * (k + 0.5)) / count;
       const a = c - windowWidth / 2;
       const b = c + windowWidth / 2;
-      walls.push({ cx: x, cz: (cursor + a) / 2, sx: t, sz: a - cursor, y0, y1: y0 + H, kind: 'EXTERIOR' });
-      walls.push({ cx: x, cz: c, sx: t, sz: windowWidth, y0, y1: y0 + sill, kind: 'EXTERIOR' });
-      walls.push({ cx: x, cz: c, sx: t, sz: windowWidth, y0: y0 + lintel, y1: y0 + H, kind: 'EXTERIOR' });
+      walls.push({
+        cx: x,
+        cz: (cursor + a) / 2,
+        sx: t,
+        sz: a - cursor,
+        y0,
+        y1: y0 + H,
+        kind: "EXTERIOR",
+      });
+      walls.push({ cx: x, cz: c, sx: t, sz: windowWidth, y0, y1: y0 + sill, kind: "EXTERIOR" });
+      walls.push({
+        cx: x,
+        cz: c,
+        sx: t,
+        sz: windowWidth,
+        y0: y0 + lintel,
+        y1: y0 + H,
+        kind: "EXTERIOR",
+      });
       cursor = b;
     }
-    walls.push({ cx: x, cz: (cursor + maxZ) / 2, sx: t, sz: maxZ - cursor, y0, y1: y0 + H, kind: 'EXTERIOR' });
+    walls.push({
+      cx: x,
+      cz: (cursor + maxZ) / 2,
+      sx: t,
+      sz: maxZ - cursor,
+      y0,
+      y1: y0 + H,
+      kind: "EXTERIOR",
+    });
   };
 
   const rooms: Rect[] = [];
-  const westRoom: Rect = { minX: innerMinX + 0.4, maxX: partitionX - 0.6, minZ: footprint.minZ + 0.8, maxZ: footprint.maxZ - 0.8 };
+  const westRoom: Rect = {
+    minX: innerMinX + 0.4,
+    maxX: partitionX - 0.6,
+    minZ: footprint.minZ + 0.8,
+    maxZ: footprint.maxZ - 0.8,
+  };
   const bigEast = d >= 26;
   const splitZ = cz;
   if (bigEast) {
     rooms.push(westRoom);
-    rooms.push({ minX: partitionX + 0.6, maxX: footprint.maxX - 0.8, minZ: footprint.minZ + 0.8, maxZ: splitZ - 0.6 });
-    rooms.push({ minX: partitionX + 0.6, maxX: footprint.maxX - 0.8, minZ: splitZ + 0.6, maxZ: footprint.maxZ - 0.8 });
+    rooms.push({
+      minX: partitionX + 0.6,
+      maxX: footprint.maxX - 0.8,
+      minZ: footprint.minZ + 0.8,
+      maxZ: splitZ - 0.6,
+    });
+    rooms.push({
+      minX: partitionX + 0.6,
+      maxX: footprint.maxX - 0.8,
+      minZ: splitZ + 0.6,
+      maxZ: footprint.maxZ - 0.8,
+    });
   } else {
     rooms.push(westRoom);
-    rooms.push({ minX: partitionX + 0.6, maxX: footprint.maxX - 0.8, minZ: footprint.minZ + 0.8, maxZ: footprint.maxZ - 0.8 });
+    rooms.push({
+      minX: partitionX + 0.6,
+      maxX: footprint.maxX - 0.8,
+      minZ: footprint.minZ + 0.8,
+      maxZ: footprint.maxZ - 0.8,
+    });
   }
 
   for (let f = 0; f < floors; f++) {
     const y0 = floorY(f);
-    addXWall(footprint.minZ + t / 2, f, f === 0 && doorSide === 'N');
-    addXWall(footprint.maxZ - t / 2, f, f === 0 && doorSide === 'S');
+    addXWall(footprint.minZ + t / 2, f, f === 0 && doorSide === "N");
+    addXWall(footprint.maxZ - t / 2, f, f === 0 && doorSide === "S");
     addZWall(footprint.minX + t / 2, f, false);
     addZWall(footprint.maxX - t / 2, f, true);
 
     // Stair core inner side wall (open at both ends).
-    walls.push({ cx: coreMaxX + t / 2, cz, sx: t, sz: RAMP_LENGTH, y0, y1: y0 + H, kind: 'CORE' });
+    walls.push({ cx: coreMaxX + t / 2, cz, sx: t, sz: RAMP_LENGTH, y0, y1: y0 + H, kind: "CORE" });
 
     // Partition along Z at partitionX with two doorways.
     const pMinZ = footprint.minZ + t;
@@ -298,25 +491,66 @@ function buildBuilding(
       [doorB + dw / 2, pMaxZ],
     ];
     for (const [a, b] of segs) {
-      if (b - a > 0.1) walls.push({ cx: partitionX, cz: (a + b) / 2, sx: 0.2, sz: b - a, y0, y1: y0 + H - 0.02, kind: 'INTERIOR' });
+      if (b - a > 0.1)
+        walls.push({
+          cx: partitionX,
+          cz: (a + b) / 2,
+          sx: 0.2,
+          sz: b - a,
+          y0,
+          y1: y0 + H - 0.02,
+          kind: "INTERIOR",
+        });
     }
     for (const dz of [doorA, doorB]) {
-      walls.push({ cx: partitionX, cz: dz, sx: 0.2, sz: dw, y0: y0 + 2.3, y1: y0 + H - 0.02, kind: 'INTERIOR' });
+      walls.push({
+        cx: partitionX,
+        cz: dz,
+        sx: 0.2,
+        sz: dw,
+        y0: y0 + 2.3,
+        y1: y0 + H - 0.02,
+        kind: "INTERIOR",
+      });
     }
 
     if (bigEast) {
       const qMinX = partitionX + 0.1;
       const qMaxX = footprint.maxX - t;
       const doorC = (qMinX + qMaxX) / 2;
-      walls.push({ cx: (qMinX + doorC - 0.7) / 2, cz: splitZ, sx: doorC - 0.7 - qMinX, sz: 0.2, y0, y1: y0 + H - 0.02, kind: 'INTERIOR' });
-      walls.push({ cx: (doorC + 0.7 + qMaxX) / 2, cz: splitZ, sx: qMaxX - doorC - 0.7, sz: 0.2, y0, y1: y0 + H - 0.02, kind: 'INTERIOR' });
-      walls.push({ cx: doorC, cz: splitZ, sx: 1.4, sz: 0.2, y0: y0 + 2.3, y1: y0 + H - 0.02, kind: 'INTERIOR' });
+      walls.push({
+        cx: (qMinX + doorC - 0.7) / 2,
+        cz: splitZ,
+        sx: doorC - 0.7 - qMinX,
+        sz: 0.2,
+        y0,
+        y1: y0 + H - 0.02,
+        kind: "INTERIOR",
+      });
+      walls.push({
+        cx: (doorC + 0.7 + qMaxX) / 2,
+        cz: splitZ,
+        sx: qMaxX - doorC - 0.7,
+        sz: 0.2,
+        y0,
+        y1: y0 + H - 0.02,
+        kind: "INTERIOR",
+      });
+      walls.push({
+        cx: doorC,
+        cz: splitZ,
+        sx: 1.4,
+        sz: 0.2,
+        y0: y0 + 2.3,
+        y1: y0 + H - 0.02,
+        kind: "INTERIOR",
+      });
     }
   }
 
   // Loot: 2-3 spots per floor in rooms.
   const loot: LootSpot[] = [];
-  const kinds: LootKind[] = ['AMMO', 'SALVAGE', 'MEDKIT', 'AMMO', 'ARMOR', 'SALVAGE'];
+  const kinds: LootKind[] = ["AMMO", "SALVAGE", "MEDKIT", "AMMO", "ARMOR", "SALVAGE"];
   for (let f = 0; f < floors; f++) {
     const count = 2 + (rng() < 0.45 ? 1 : 0);
     for (let k = 0; k < count; k++) {
@@ -333,8 +567,15 @@ function buildBuilding(
       }
       cornerZ = Math.max(room.minZ + 0.7, Math.min(room.maxZ - 0.7, cornerZ));
       const roll = rng();
-      const kind: LootKind = roll < 0.06 ? 'DOSSIER' : kinds[Math.floor(rng() * kinds.length)];
-      loot.push({ id: `${id}-f${f}-l${k}`, buildingId: id, floor: f, x: cornerX, z: cornerZ, kind });
+      const kind: LootKind = roll < 0.06 ? "DOSSIER" : kinds[Math.floor(rng() * kinds.length)];
+      loot.push({
+        id: `${id}-f${f}-l${k}`,
+        buildingId: id,
+        floor: f,
+        x: cornerX,
+        z: cornerZ,
+        kind,
+      });
     }
   }
 
@@ -374,44 +615,82 @@ export function getCityLayout(): CityLayout {
         blocks.push({ i, j, cx, cz, kind: open.kind, name: open.name });
         continue;
       }
-      blocks.push({ i, j, cx, cz, kind: 'BUILDINGS' });
+      blocks.push({ i, j, cx, cz, kind: "BUILDINGS" });
       const special = SPECIAL_BUILDINGS.find((s) => s.i === i && s.j === j);
       // Door faces the avenue side of the block when possible.
-      const doorSide: 'N' | 'S' = cz < AVENUE_Z ? 'S' : 'N';
+      const doorSide: "N" | "S" = cz < AVENUE_Z ? "S" : "N";
       if (special) {
         buildings.push(
-          buildBuilding(buildings.length, special.id, special.name, special.role, cx, cz, special.w, special.d, special.floors, doorSide, rng, true)
+          buildBuilding(
+            buildings.length,
+            special.id,
+            special.name,
+            special.role,
+            cx,
+            cz,
+            special.w,
+            special.d,
+            special.floors,
+            doorSide,
+            rng,
+            true,
+          ),
         );
         continue;
       }
 
       const roll = rng();
-      const lots: Array<{ x: number; z: number; w: number; d: number; door: 'N' | 'S' }> = [];
+      const lots: Array<{ x: number; z: number; w: number; d: number; door: "N" | "S" }> = [];
       const inset = BLOCK_SIZE / 2 - 2;
       if (roll < 0.3) {
-        lots.push({ x: cx, z: cz, w: 30 + Math.floor(rng() * 5), d: 26 + Math.floor(rng() * 6), door: doorSide });
+        lots.push({
+          x: cx,
+          z: cz,
+          w: 30 + Math.floor(rng() * 5),
+          d: 26 + Math.floor(rng() * 6),
+          door: doorSide,
+        });
       } else if (roll < 0.75) {
         const w = 16;
         lots.push({ x: cx - inset + w / 2, z: cz, w, d: 30, door: doorSide });
         lots.push({ x: cx + inset - w / 2, z: cz, w, d: 30, door: doorSide });
       } else {
         const s = 16;
-        lots.push({ x: cx - inset + s / 2, z: cz - inset + s / 2, w: s, d: s + 0, door: 'N' });
-        lots.push({ x: cx + inset - s / 2, z: cz - inset + s / 2, w: s, d: s, door: 'N' });
-        lots.push({ x: cx - inset + s / 2, z: cz + inset - s / 2, w: s, d: s, door: 'S' });
-        lots.push({ x: cx + inset - s / 2, z: cz + inset - s / 2, w: s, d: s, door: 'S' });
+        lots.push({ x: cx - inset + s / 2, z: cz - inset + s / 2, w: s, d: s + 0, door: "N" });
+        lots.push({ x: cx + inset - s / 2, z: cz - inset + s / 2, w: s, d: s, door: "N" });
+        lots.push({ x: cx - inset + s / 2, z: cz + inset - s / 2, w: s, d: s, door: "S" });
+        lots.push({ x: cx + inset - s / 2, z: cz + inset - s / 2, w: s, d: s, door: "S" });
       }
 
       for (const lot of lots) {
         const typeRoll = rng();
-        const role: 'APARTMENT' | 'OFFICE' | 'SHOPS' = typeRoll < 0.5 ? 'APARTMENT' : typeRoll < 0.8 ? 'OFFICE' : 'SHOPS';
-        const floors = role === 'SHOPS' ? 2 : 2 + Math.floor(rng() * 3);
+        const role: "APARTMENT" | "OFFICE" | "SHOPS" =
+          typeRoll < 0.5 ? "APARTMENT" : typeRoll < 0.8 ? "OFFICE" : "SHOPS";
+        const floors = role === "SHOPS" ? 2 : 2 + Math.floor(rng() * 3);
         const list = GENERIC_NAMES[role];
         const baseName = list[nameCursor[role] % list.length];
-        const suffix = nameCursor[role] >= list.length ? ` ${Math.floor(nameCursor[role] / list.length) + 1}` : '';
+        const suffix =
+          nameCursor[role] >= list.length
+            ? ` ${Math.floor(nameCursor[role] / list.length) + 1}`
+            : "";
         nameCursor[role]++;
         const bid = `b${i}${j}-${lots.indexOf(lot)}`;
-        buildings.push(buildBuilding(buildings.length, bid, baseName + suffix, role, lot.x, lot.z, lot.w, lot.d, floors, lot.door, rng, false));
+        buildings.push(
+          buildBuilding(
+            buildings.length,
+            bid,
+            baseName + suffix,
+            role,
+            lot.x,
+            lot.z,
+            lot.w,
+            lot.d,
+            floors,
+            lot.door,
+            rng,
+            false,
+          ),
+        );
       }
     }
   }
@@ -488,12 +767,16 @@ export function getFloorAt(b: Building, y: number): number {
 }
 
 export function getBuildingEntrance(b: Building): { x: number; z: number } {
-  const z = b.doorSide === 'N' ? b.footprint.minZ - 2.2 : b.footprint.maxZ + 2.2;
+  const z = b.doorSide === "N" ? b.footprint.minZ - 2.2 : b.footprint.maxZ + 2.2;
   return { x: b.doorX, z };
 }
 
 /** Deterministic enemy posts on a floor (inside rooms, away from the stair core). */
-export function getFloorPosts(b: Building, floor: number, count: number): Array<{ x: number; z: number; room: Rect }> {
+export function getFloorPosts(
+  b: Building,
+  floor: number,
+  count: number,
+): Array<{ x: number; z: number; room: Rect }> {
   const rng = createSeededRng(b.index * 131 + floor * 17 + count);
   const out: Array<{ x: number; z: number; room: Rect }> = [];
   for (let k = 0; k < count; k++) {

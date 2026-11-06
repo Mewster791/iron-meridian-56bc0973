@@ -1,40 +1,80 @@
 /**
- * Plays "Iron Bow, Broken Crown" — the single Iron Meridian soundtrack.
+ * Unified Soundtrack Engine for Iron Meridian.
  *
- * Fully procedural Web Audio (no audio files): a contrabass, a cello and a
- * violin section synthesised from bowed-string voices in a cold concert hall.
- * The score itself (melody, chords, tempo, dynamics, accompaniment figures)
- * lives in ironBowScore.ts; this engine only performs it.
+ * Supports:
+ *  - "Iron Crown Rising (Version 1)" — cinematic brass & orchestral score (audio file) [DEFAULT]
+ *  - "Iron Crown Rising (Version 2)" — alternate atmospheric mix (audio file)
+ *  - "Iron Bow, Broken Crown" — procedural string chamber score synthesized live via Web Audio
  *
- * The song is the same everywhere — home screen, map, missions, debriefs. It
- * never reacts to enemies, gunfire or menus: it plays from the intro to the
- * final chord, rests for the tail, then starts again from the top.
+ * Features live in-browser playback, seamless loop, track switching, and offline WAV render export
+ * so players can download the original synthesized song or imported music files for offline listening.
  */
 
 import {
   IRON_BOW,
   chordTones,
   locate,
+  songDurationSec,
   type Articulation,
   type Chord,
   type Part,
   type ScoreNote,
   type SectionId,
   type Voice,
-} from './ironBowScore';
+} from "./ironBowScore";
 
-const MASTER_LEVEL = 0.4;
-const MUTE_KEY = 'iron-meridian:music-muted';
+const MASTER_LEVEL = 0.55;
+const MUTE_KEY = "iron-meridian:music-muted";
+const TRACK_KEY = "iron-meridian:music-track";
 const LOOKAHEAD_SEC = 0.15;
 
 const midiHz = (m: number): number => 440 * Math.pow(2, (m - 69) / 12);
 
+export type SoundtrackId = "iron-crown-1" | "iron-crown-2" | "iron-bow-original";
+
+export interface SoundtrackTrack {
+  id: SoundtrackId;
+  title: string;
+  artist: string;
+  versionLabel: string;
+  type: "file" | "procedural";
+  fileUrl?: string;
+  description: string;
+}
+
+export const SOUNDTRACK_TRACKS: SoundtrackTrack[] = [
+  {
+    id: "iron-crown-1",
+    title: "Iron Crown Rising",
+    versionLabel: "Version 1 (Orchestral Theme)",
+    artist: "Iron Meridian Soundtrack",
+    type: "file",
+    fileUrl: "/assets/aistudio/Iron-Crown-Rising1_52046830.mp3",
+    description: "Full cinematic arrangement with driving brass, percussion, and choral motifs",
+  },
+  {
+    id: "iron-crown-2",
+    title: "Iron Crown Rising",
+    versionLabel: "Version 2 (Atmospheric Mix)",
+    artist: "Iron Meridian Soundtrack",
+    type: "file",
+    fileUrl: "/assets/aistudio/Iron-Crown-Rising_2__bda0a63c.mp3",
+    description: "Atmospheric mix with acoustic textures, cold hall resonance, and deep bass",
+  },
+  {
+    id: "iron-bow-original",
+    title: "Iron Bow, Broken Crown",
+    versionLabel: "Original Procedural Score",
+    artist: "Chamber String Ensemble",
+    type: "procedural",
+    description: "Procedural synthesis performing the through-composed chamber score",
+  },
+];
+
 interface VoiceSpec {
-  /** Detune (cents) of each sawtooth in the section. */
   detunes: number[];
   highpass: number;
   lowpass: number;
-  /** Body resonance. */
   bodyHz: number;
   bodyGain: number;
   vibratoHz: number;
@@ -44,7 +84,6 @@ interface VoiceSpec {
   reverbSend: number;
 }
 
-/** Orchestral seating: violins left, cello centre-right, contrabass right. */
 const VOICES: Record<Voice, VoiceSpec> = {
   contrabass: {
     detunes: [-7, 6],
@@ -86,6 +125,7 @@ const VOICES: Record<Voice, VoiceSpec> = {
 
 export interface MusicStatus {
   title: string;
+  trackId: SoundtrackId;
   playing: boolean;
   muted: boolean;
   section: SectionId;
@@ -93,102 +133,204 @@ export interface MusicStatus {
   bpm: number;
 }
 
-class IronBowEngine {
+class UnifiedMusicEngine {
+  private currentTrack: SoundtrackId = "iron-crown-1";
+  private muted = false;
+  private started = false;
+
+  // File audio playback
+  private audioEl: HTMLAudioElement | null = null;
+
+  // Procedural Web Audio playback
   private ctx: AudioContext | null = null;
   private master!: GainNode;
   private reverb!: ConvolverNode;
   private buses!: Record<Voice, GainNode>;
   private noise!: AudioBuffer;
-
-  private muted = false;
-  private started = false;
   private timer: number | null = null;
   private nextTime = 0;
   private step = 0;
 
+  private listeners: Array<() => void> = [];
+
   constructor() {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       try {
-        this.muted = window.localStorage.getItem(MUTE_KEY) === '1';
+        this.muted = window.localStorage.getItem(MUTE_KEY) === "1";
+        const savedTrack = window.localStorage.getItem(TRACK_KEY) as SoundtrackId;
+        if (savedTrack && SOUNDTRACK_TRACKS.some((t) => t.id === savedTrack)) {
+          this.currentTrack = savedTrack;
+        }
       } catch {
         /* storage unavailable */
       }
     }
   }
 
-  // ---- public API --------------------------------------------------------
+  public subscribe(cb: () => void): () => void {
+    this.listeners.push(cb);
+    return () => {
+      this.listeners = this.listeners.filter((l) => l !== cb);
+    };
+  }
 
-  /** Must be called from a user gesture (browser autoplay rules). Safe to call repeatedly. */
+  private notify(): void {
+    for (const cb of this.listeners) cb();
+  }
+
+  public getTrack(): SoundtrackId {
+    return this.currentTrack;
+  }
+
+  public setTrack(trackId: SoundtrackId): void {
+    if (this.currentTrack === trackId) return;
+    this.currentTrack = trackId;
+    try {
+      window.localStorage.setItem(TRACK_KEY, trackId);
+    } catch {
+      /* ignore */
+    }
+
+    if (this.started && !this.muted) {
+      this.stopCurrent();
+      this.playCurrent();
+    } else {
+      this.stopCurrent();
+    }
+    this.notify();
+  }
+
   public start(): void {
-    if (typeof window === 'undefined') return;
-    if (!this.ctx) {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      this.ctx = new AudioCtx();
-      this.buildGraph();
-      document.addEventListener('visibilitychange', this.onVisibility);
-    }
+    if (typeof window === "undefined") return;
     if (this.muted) return;
-    if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
-    if (!this.started) {
-      this.started = true;
-      const now = this.ctx.currentTime;
-      this.master.gain.setValueAtTime(0, now);
-      this.master.gain.linearRampToValueAtTime(MASTER_LEVEL, now + 1.5);
-      this.nextTime = now + 0.1;
-      this.step = 0;
-      this.timer = window.setInterval(this.tick, 25);
-    }
+    this.started = true;
+    this.playCurrent();
+    this.notify();
   }
 
   public setMuted(muted: boolean): void {
     this.muted = muted;
     try {
-      window.localStorage.setItem(MUTE_KEY, muted ? '1' : '0');
+      window.localStorage.setItem(MUTE_KEY, muted ? "1" : "0");
     } catch {
       /* ignore */
     }
-    if (!this.ctx) {
-      if (!muted) this.start();
-      return;
-    }
-    const now = this.ctx.currentTime;
+
     if (muted) {
-      this.master.gain.setTargetAtTime(0, now, 0.15);
-      window.setTimeout(() => {
-        if (this.muted) this.ctx?.suspend().catch(() => {});
-      }, 600);
+      this.stopCurrent();
     } else {
-      this.ctx.resume().catch(() => {});
-      if (!this.started) this.start();
-      else {
-        this.master.gain.setTargetAtTime(MASTER_LEVEL, now, 0.4);
-        this.nextTime = this.ctx.currentTime + 0.1;
-      }
+      this.started = true;
+      this.playCurrent();
     }
+    this.notify();
   }
 
   public isMuted(): boolean {
     return this.muted;
   }
 
-  /** Where the song is right now (used by the dev hook / tests in the browser). */
   public getStatus(): MusicStatus {
+    const track = SOUNDTRACK_TRACKS.find((t) => t.id === this.currentTrack) ?? SOUNDTRACK_TRACKS[0];
     const pos = locate(IRON_BOW, this.step);
     return {
-      title: IRON_BOW.title,
+      title: track.title,
+      trackId: this.currentTrack,
       playing: this.started && !this.muted,
       muted: this.muted,
-      section: pos.section.id,
-      bar: pos.bar,
-      bpm: Math.round(pos.bpm),
+      section: this.currentTrack === "iron-bow-original" ? pos.section.id : "INTRO",
+      bar: this.currentTrack === "iron-bow-original" ? pos.bar : 1,
+      bpm: this.currentTrack === "iron-bow-original" ? Math.round(pos.bpm) : 104,
     };
   }
 
-  // ---- graph -------------------------------------------------------------
+  private stopCurrent(): void {
+    // Stop file audio
+    if (this.audioEl) {
+      this.audioEl.pause();
+      this.audioEl.currentTime = 0;
+    }
+    // Stop procedural audio
+    if (this.timer !== null) {
+      window.clearInterval(this.timer);
+      this.timer = null;
+    }
+    if (this.ctx && this.master) {
+      try {
+        this.master.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 
-  private buildGraph(): void {
-    const ctx = this.ctx!;
+  private playCurrent(): void {
+    if (!this.started || this.muted) return;
+    const track = SOUNDTRACK_TRACKS.find((t) => t.id === this.currentTrack) ?? SOUNDTRACK_TRACKS[0];
+
+    if (track.type === "file" && track.fileUrl) {
+      if (!this.audioEl) {
+        this.audioEl = new Audio();
+        this.audioEl.loop = true;
+        this.audioEl.preload = "auto";
+      }
+      if (
+        this.audioEl.src !== window.location.origin + track.fileUrl &&
+        !this.audioEl.src.endsWith(track.fileUrl)
+      ) {
+        this.audioEl.src = track.fileUrl;
+      }
+      this.audioEl.volume = 0.58;
+      this.audioEl.play().catch(() => {
+        // Autoplay may be blocked until user gesture
+      });
+    } else {
+      // Procedural synthesizer
+      this.startProcedural();
+    }
+  }
+
+  private startProcedural(): void {
+    if (!this.ctx) {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+      this.ctx = new AudioCtx();
+      this.buildGraph(this.ctx);
+      document.addEventListener("visibilitychange", this.onVisibility);
+    }
+    if (this.ctx.state === "suspended") {
+      this.ctx.resume().catch(() => {});
+    }
+    const now = this.ctx.currentTime;
+    this.master.gain.setValueAtTime(0, now);
+    this.master.gain.linearRampToValueAtTime(MASTER_LEVEL, now + 1.2);
+    this.nextTime = now + 0.1;
+    this.step = 0;
+    if (this.timer === null) {
+      this.timer = window.setInterval(this.tick, 25);
+    }
+  }
+
+  private onVisibility = (): void => {
+    if (document.hidden) {
+      if (this.audioEl && !this.muted) this.audioEl.pause();
+      if (this.ctx) this.ctx.suspend().catch(() => {});
+    } else if (!this.muted && this.started) {
+      if (this.currentTrack !== "iron-bow-original") {
+        this.audioEl?.play().catch(() => {});
+      } else if (this.ctx) {
+        this.ctx.resume().catch(() => {});
+        this.nextTime = this.ctx.currentTime + 0.1;
+      }
+    }
+  };
+
+  private buildGraph(ctx: BaseAudioContext): {
+    master: GainNode;
+    buses: Record<Voice, GainNode>;
+    noise: AudioBuffer;
+  } {
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -16;
     comp.ratio.value = 3.5;
@@ -196,12 +338,11 @@ class IronBowEngine {
     comp.release.value = 0.3;
     comp.connect(ctx.destination);
 
-    this.master = ctx.createGain();
-    this.master.gain.value = 0;
-    this.master.connect(comp);
+    const master = ctx.createGain();
+    master.gain.value = 0;
+    master.connect(comp);
 
-    // Large, cold stone hall: 4.5 s stereo tail that darkens as it decays.
-    this.reverb = ctx.createConvolver();
+    const reverb = ctx.createConvolver();
     const len = Math.floor(ctx.sampleRate * 4.5);
     const ir = ctx.createBuffer(2, len, ctx.sampleRate);
     for (let c = 0; c < 2; c++) {
@@ -214,64 +355,79 @@ class IronBowEngine {
         d[i] = lp * Math.pow(1 - tNorm, 3);
       }
     }
-    this.reverb.buffer = ir;
+    reverb.buffer = ir;
     const reverbReturn = ctx.createGain();
     reverbReturn.gain.value = 0.9;
-    this.reverb.connect(reverbReturn);
-    reverbReturn.connect(this.master);
+    reverb.connect(reverbReturn);
+    reverbReturn.connect(master);
 
     const bus = (voice: Voice): GainNode => {
       const spec = VOICES[voice];
       const g = ctx.createGain();
       g.gain.value = 1;
-      const pan = ctx.createStereoPanner();
-      pan.pan.value = spec.pan;
-      g.connect(pan);
-      pan.connect(this.master);
-      const send = ctx.createGain();
-      send.gain.value = spec.reverbSend;
-      pan.connect(send);
-      send.connect(this.reverb);
+      const pan = (ctx as AudioContext).createStereoPanner
+        ? (ctx as AudioContext).createStereoPanner()
+        : null;
+      if (pan) {
+        pan.pan.value = spec.pan;
+        g.connect(pan);
+        pan.connect(master);
+        const send = ctx.createGain();
+        send.gain.value = spec.reverbSend;
+        pan.connect(send);
+        send.connect(reverb);
+      } else {
+        g.connect(master);
+        const send = ctx.createGain();
+        send.gain.value = spec.reverbSend;
+        g.connect(send);
+        send.connect(reverb);
+      }
       return g;
     };
-    this.buses = { contrabass: bus('contrabass'), cello: bus('cello'), violin: bus('violin') };
+    const buses = { contrabass: bus("contrabass"), cello: bus("cello"), violin: bus("violin") };
 
-    this.noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
-    const nd = this.noise.getChannelData(0);
+    const noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const nd = noise.getChannelData(0);
     for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+
+    if (ctx === this.ctx) {
+      this.master = master;
+      this.reverb = reverb;
+      this.buses = buses;
+      this.noise = noise;
+    }
+
+    return { master, buses, noise };
   }
 
-  private onVisibility = (): void => {
-    if (!this.ctx) return;
-    if (document.hidden) this.ctx.suspend().catch(() => {});
-    else if (!this.muted && this.started) {
-      this.ctx.resume().catch(() => {});
-      this.nextTime = this.ctx.currentTime + 0.1;
-    }
-  };
-
-  // ---- sequencing ----------------------------------------------------------
-
   private tick = (): void => {
-    if (!this.ctx || this.muted) return;
+    if (!this.ctx || this.muted || this.currentTrack !== "iron-bow-original") return;
     const now = this.ctx.currentTime;
-    if (this.nextTime < now - 0.25) this.nextTime = now + 0.05; // recovered from a stall
+    if (this.nextTime < now - 0.25) this.nextTime = now + 0.05;
     while (this.nextTime < now + LOOKAHEAD_SEC) {
       const sixteenth = 60 / locate(IRON_BOW, this.step).bpm / 4;
-      this.scheduleStep(this.step, this.nextTime, sixteenth);
+      this.scheduleStep(this.ctx, this.buses, this.noise, this.step, this.nextTime, sixteenth);
       this.nextTime += sixteenth;
       this.step = (this.step + 1) % IRON_BOW.totalSteps;
     }
   };
 
-  private scheduleStep(step: number, t: number, sixteenth: number): void {
+  private scheduleStep(
+    ctx: BaseAudioContext,
+    buses: Record<Voice, GainNode>,
+    noise: AudioBuffer,
+    step: number,
+    t: number,
+    sixteenth: number,
+  ): void {
     const pos = locate(IRON_BOW, step);
     const notes = IRON_BOW.melodyByStep.get(step) ?? [];
 
-    for (const n of notes) this.playMelody(n, t, sixteenth);
+    for (const n of notes) this.playMelody(ctx, buses, noise, n, t, sixteenth);
 
     for (const part of pos.section.parts) {
-      this.playPart(part, {
+      this.playPart(ctx, buses, noise, part, {
         t,
         s: pos.stepInBar,
         bar: pos.bar,
@@ -284,15 +440,24 @@ class IronBowEngine {
     }
   }
 
-  private playMelody(n: ScoreNote, t: number, sixteenth: number): void {
+  private playMelody(
+    ctx: BaseAudioContext,
+    buses: Record<Voice, GainNode>,
+    noise: AudioBuffer,
+    n: ScoreNote,
+    t: number,
+    sixteenth: number,
+  ): void {
     const dur = n.dur * sixteenth;
-    // A legato line overlaps slightly into the next note, like a bow change.
-    const len = n.articulation === 'legato' ? dur * 1.04 : dur;
+    const len = n.articulation === "legato" ? dur * 1.04 : dur;
     const vel = (n.stressed ? 0.95 : 0.7) * n.velocity;
-    this.bowed(t, n.midi, len, vel, n.voice, n.articulation);
+    this.bowed(ctx, buses, noise, t, n.midi, len, vel, n.voice, n.articulation);
   }
 
   private playPart(
+    ctx: BaseAudioContext,
+    buses: Record<Voice, GainNode>,
+    noise: AudioBuffer,
     part: Part,
     c: {
       t: number;
@@ -303,98 +468,200 @@ class IronBowEngine {
       dyn: number;
       sixteenth: number;
       melodyHere: ScoreNote[];
-    }
+    },
   ): void {
     const { t, s, bar, chord, dyn, sixteenth: x } = c;
     switch (part) {
-      // Marching boots in the mud: driving staccato eighths, accents on the beat.
-      case 'bassMarch': {
+      case "bassMarch": {
         if (s % 2 !== 0) return;
         const accent = s % 8 === 0 ? 1 : s % 4 === 0 ? 0.75 : 0.55;
         const m = s === 6 || s === 14 ? chord.root + 12 : chord.root;
-        this.bowed(t, m, x * 1.2, accent * 0.85 * dyn, 'contrabass', 'staccato');
+        this.bowed(ctx, buses, noise, t, m, x * 1.2, accent * 0.85 * dyn, "contrabass", "staccato");
         return;
       }
-      case 'bassDrone':
-        if (s === 0) this.bowed(t, chord.root, x * 16, 0.42 * dyn, 'contrabass', 'legato');
+      case "bassDrone":
+        if (s === 0)
+          this.bowed(ctx, buses, noise, t, chord.root, x * 16, 0.42 * dyn, "contrabass", "legato");
         return;
-      // Bridge: a low lub-dub heartbeat.
-      case 'bassHeartbeat':
-        if (s === 0) this.bowed(t, chord.root, x * 2.2, 0.85 * dyn + 0.2, 'contrabass', 'marcato');
-        if (s === 3) this.bowed(t, chord.root, x * 2, 0.6 * dyn + 0.15, 'contrabass', 'marcato');
+      case "bassHeartbeat":
+        if (s === 0)
+          this.bowed(
+            ctx,
+            buses,
+            noise,
+            t,
+            chord.root,
+            x * 2.2,
+            0.85 * dyn + 0.2,
+            "contrabass",
+            "marcato",
+          );
+        if (s === 3)
+          this.bowed(
+            ctx,
+            buses,
+            noise,
+            t,
+            chord.root,
+            x * 2,
+            0.6 * dyn + 0.15,
+            "contrabass",
+            "marcato",
+          );
         return;
-      // Chorus: thunderous long bowed roots.
-      case 'bassLong':
+      case "bassLong":
         if (s === 0) {
-          this.bowed(t, chord.root, x * 16, 0.95 * dyn, 'contrabass', 'marcato');
-          this.bowed(t, chord.root + 12, x * 16, 0.5 * dyn, 'contrabass', 'marcato');
+          this.bowed(ctx, buses, noise, t, chord.root, x * 16, 0.95 * dyn, "contrabass", "marcato");
+          this.bowed(
+            ctx,
+            buses,
+            noise,
+            t,
+            chord.root + 12,
+            x * 16,
+            0.5 * dyn,
+            "contrabass",
+            "marcato",
+          );
         }
         return;
-      // Verse 1b: sharp, urgent cello counter-line on the off-beats.
-      case 'celloCounter': {
+      case "celloCounter": {
         if (s % 4 !== 2) return;
         const tones = chordTones(chord, 43, 4);
-        this.bowed(t, tones[(s >> 2) % 4], x * 1.6, 0.55 * dyn, 'cello', 'marcato');
+        this.bowed(
+          ctx,
+          buses,
+          noise,
+          t,
+          tones[(s >> 2) % 4],
+          x * 1.6,
+          0.55 * dyn,
+          "cello",
+          "marcato",
+        );
         return;
       }
-      // Chorus: heavy chord stabs — DUM . . . . . DUM . DUM . . . . . . .
-      case 'celloChords': {
+      case "celloChords": {
         if (s !== 0 && s !== 6 && s !== 8) return;
         const len = s === 0 ? 5 : s === 6 ? 1.6 : 6;
         const vel = (s === 0 ? 0.75 : 0.6) * dyn;
-        for (const m of chordTones(chord, 45, 3)) this.bowed(t, m, x * len, vel, 'cello', 'marcato');
+        for (const m of chordTones(chord, 45, 3))
+          this.bowed(ctx, buses, noise, t, m, x * len, vel, "cello", "marcato");
         return;
       }
-      // Verse 2: syncopated, jagged cello rhythm.
-      case 'celloJagged': {
+      case "celloJagged": {
         const hits = [0, 3, 6, 10, 12];
         const i = hits.indexOf(s);
         if (i < 0) return;
         const tones = chordTones(chord, 43, 3);
-        this.bowed(t, tones[i % 2 === 0 ? 0 : 2], x * 1.4, (i === 0 ? 0.75 : 0.55) * dyn, 'cello', 'staccato');
+        this.bowed(
+          ctx,
+          buses,
+          noise,
+          t,
+          tones[i % 2 === 0 ? 0 : 2],
+          x * 1.4,
+          (i === 0 ? 0.75 : 0.55) * dyn,
+          "cello",
+          "staccato",
+        );
         return;
       }
-      // Fast driving spiccato in violins and cellos.
-      case 'spiccato': {
+      case "spiccato": {
         const v = chordTones(chord, 62, 3);
-        this.bowed(t, v[[0, 1, 2, 1][s % 4]], x * 0.8, (s % 4 === 0 ? 0.5 : 0.34) * dyn, 'violin', 'spiccato');
-        if (s % 2 === 0) this.bowed(t, chord.root + 12, x * 0.8, 0.4 * dyn, 'cello', 'spiccato');
+        this.bowed(
+          ctx,
+          buses,
+          noise,
+          t,
+          v[[0, 1, 2, 1][s % 4]],
+          x * 0.8,
+          (s % 4 === 0 ? 0.5 : 0.34) * dyn,
+          "violin",
+          "spiccato",
+        );
+        if (s % 2 === 0)
+          this.bowed(
+            ctx,
+            buses,
+            noise,
+            t,
+            chord.root + 12,
+            x * 0.8,
+            0.4 * dyn,
+            "cello",
+            "spiccato",
+          );
         return;
       }
-      // Verse 2b: sharp, tragic high violin notes.
-      case 'violinPiercing': {
+      case "violinPiercing": {
         if (s !== 0 && s !== 8) return;
         const tones = chordTones(chord, 79, 3);
-        this.bowed(t, tones[(bar + (s ? 1 : 0)) % 3], x * 6, 0.5 * dyn, 'violin', 'marcato');
+        this.bowed(
+          ctx,
+          buses,
+          noise,
+          t,
+          tones[(bar + (s ? 1 : 0)) % 3],
+          x * 6,
+          0.5 * dyn,
+          "violin",
+          "marcato",
+        );
         return;
       }
-      // Outro: violins climbing to a fever pitch, one chord tone higher every bar.
-      case 'feverRun': {
+      case "feverRun": {
         const tones = chordTones(chord, 69 + bar * 3, 4);
-        this.bowed(t, tones[s % 4], x * 0.8, (0.32 + bar * 0.08) * dyn, 'violin', 'spiccato');
+        this.bowed(
+          ctx,
+          buses,
+          noise,
+          t,
+          tones[s % 4],
+          x * 0.8,
+          (0.32 + bar * 0.08) * dyn,
+          "violin",
+          "spiccato",
+        );
         return;
       }
-      // Outro: a heavy chord under every word, then the massive final chord under "US".
-      case 'finalStabs': {
+      case "finalStabs": {
         for (const n of c.melodyHere) {
           if (!n.stressed && n.dur < 8) continue;
           const len = n.dur * x;
           const vel = Math.min(1, n.velocity);
-          this.bowed(t, chord.root, len, vel, 'contrabass', 'marcato');
-          this.bowed(t, chord.root + 12, len, vel * 0.6, 'contrabass', 'marcato');
-          for (const m of chordTones(chord, 45, 3)) this.bowed(t, m, len, vel * 0.7, 'cello', 'marcato');
+          this.bowed(ctx, buses, noise, t, chord.root, len, vel, "contrabass", "marcato");
+          this.bowed(
+            ctx,
+            buses,
+            noise,
+            t,
+            chord.root + 12,
+            len,
+            vel * 0.6,
+            "contrabass",
+            "marcato",
+          );
+          for (const m of chordTones(chord, 45, 3))
+            this.bowed(ctx, buses, noise, t, m, len, vel * 0.7, "cello", "marcato");
         }
         return;
       }
     }
   }
 
-  // ---- instruments ---------------------------------------------------------
-
-  /** One bowed note on a string section: detuned saws, body resonance, vibrato, bow noise. */
-  private bowed(t: number, midi: number, dur: number, vel: number, voice: Voice, art: Articulation): void {
+  private bowed(
+    ctx: BaseAudioContext,
+    buses: Record<Voice, GainNode>,
+    noise: AudioBuffer,
+    t: number,
+    midi: number,
+    dur: number,
+    vel: number,
+    voice: Voice,
+    art: Articulation,
+  ): void {
     if (vel <= 0.001 || dur <= 0) return;
-    const ctx = this.ctx!;
     const spec = VOICES[voice];
     const f = midiHz(midi);
 
@@ -403,26 +670,26 @@ class IronBowEngine {
     let len = dur;
     let accent = 1;
     switch (art) {
-      case 'legato':
-        attack = voice === 'contrabass' ? 0.1 : 0.08;
+      case "legato":
+        attack = voice === "contrabass" ? 0.1 : 0.08;
         release = 0.35;
         break;
-      case 'marcato':
+      case "marcato":
         attack = 0.014;
         release = 0.22;
         accent = 1.35;
         break;
-      case 'staccato':
+      case "staccato":
         attack = 0.008;
         release = 0.09;
         len = Math.min(dur, 0.13);
         break;
-      case 'spiccato':
+      case "spiccato":
         attack = 0.005;
         release = 0.06;
         len = Math.min(dur, 0.08);
         break;
-      case 'tremolo':
+      case "tremolo":
         attack = 0.05;
         release = 0.3;
         break;
@@ -432,19 +699,18 @@ class IronBowEngine {
     const stopAt = sustainEnd + release + 0.05;
 
     const hp = ctx.createBiquadFilter();
-    hp.type = 'highpass';
+    hp.type = "highpass";
     hp.frequency.value = spec.highpass;
     const body = ctx.createBiquadFilter();
-    body.type = 'peaking';
+    body.type = "peaking";
     body.frequency.value = spec.bodyHz;
     body.gain.value = spec.bodyGain;
     body.Q.value = 1;
     const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
+    lp.type = "lowpass";
     lp.Q.value = 0.7;
-    // Brighter at the start of the stroke, mellowing as the bow settles.
     const bright = Math.min(spec.lowpass * (0.65 + vel * 0.5), 12000);
-    lp.frequency.setValueAtTime(bright * (art === 'legato' ? 0.7 : 1.15), t);
+    lp.frequency.setValueAtTime(bright * (art === "legato" ? 0.7 : 1.15), t);
     lp.frequency.setTargetAtTime(bright, t + attack, 0.08);
 
     const amp = ctx.createGain();
@@ -463,12 +729,11 @@ class IronBowEngine {
     lp.connect(amp);
 
     let out: AudioNode = amp;
-    if (art === 'tremolo') {
-      // Fast bow tremolo: amplitude chopped at ~13 Hz.
+    if (art === "tremolo") {
       const trem = ctx.createGain();
       trem.gain.value = 0.55;
       const lfo = ctx.createOscillator();
-      lfo.type = 'triangle';
+      lfo.type = "triangle";
       lfo.frequency.value = 13;
       const depth = ctx.createGain();
       depth.gain.value = 0.45;
@@ -479,11 +744,10 @@ class IronBowEngine {
       amp.connect(trem);
       out = trem;
     }
-    out.connect(this.buses[voice]);
+    out.connect(buses[voice]);
 
-    // Vibrato blooms in on held notes only.
     let vibDepth: GainNode | null = null;
-    if (len > 0.25 && art !== 'staccato' && art !== 'spiccato') {
+    if (len > 0.25 && art !== "staccato" && art !== "spiccato") {
       const vib = ctx.createOscillator();
       vib.frequency.value = spec.vibratoHz * (0.94 + Math.random() * 0.12);
       vibDepth = ctx.createGain();
@@ -495,7 +759,7 @@ class IronBowEngine {
     }
     for (const d of spec.detunes) {
       const o = ctx.createOscillator();
-      o.type = 'sawtooth';
+      o.type = "sawtooth";
       o.frequency.value = f;
       o.detune.value = d + (Math.random() - 0.5) * 4;
       if (vibDepth) vibDepth.connect(o.detune);
@@ -504,12 +768,11 @@ class IronBowEngine {
       o.stop(stopAt);
     }
 
-    // Rosin "bite" of the bow on attacked notes.
-    if (art !== 'legato' && art !== 'tremolo') {
+    if (art !== "legato" && art !== "tremolo") {
       const n = ctx.createBufferSource();
-      n.buffer = this.noise;
+      n.buffer = noise;
       const bp = ctx.createBiquadFilter();
-      bp.type = 'bandpass';
+      bp.type = "bandpass";
       bp.frequency.value = Math.min(f * 4, 6000);
       bp.Q.value = 1.4;
       const g = ctx.createGain();
@@ -518,11 +781,127 @@ class IronBowEngine {
       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
       n.connect(bp);
       bp.connect(g);
-      g.connect(this.buses[voice]);
+      g.connect(buses[voice]);
       n.start(t, Math.random() * 1.5);
       n.stop(t + 0.08);
     }
   }
+
+  /**
+   * Renders the complete procedural "Iron Bow, Broken Crown" score into a 16-bit stereo PCM WAV Blob.
+   * Can be downloaded immediately by the user.
+   */
+  public async renderOriginalScoreWav(): Promise<Blob> {
+    const totalDuration = songDurationSec(IRON_BOW) + 4.5;
+    const sampleRate = 44100;
+    const totalSamples = Math.ceil(totalDuration * sampleRate);
+
+    const offlineCtx = new OfflineAudioContext(2, totalSamples, sampleRate);
+    const { master, buses, noise } = this.buildGraph(offlineCtx);
+
+    // Schedule the full score from start to finish
+    let schedTime = 0.1;
+    master.gain.setValueAtTime(0, 0);
+    master.gain.linearRampToValueAtTime(MASTER_LEVEL, 1.2);
+
+    for (let s = 0; s < IRON_BOW.totalSteps; s++) {
+      const sixteenth = 60 / locate(IRON_BOW, s).bpm / 4;
+      this.scheduleStep(offlineCtx, buses, noise, s, schedTime, sixteenth);
+      schedTime += sixteenth;
+    }
+
+    // Let the hall reverb decay into silence
+    master.gain.setValueAtTime(MASTER_LEVEL, schedTime);
+    master.gain.linearRampToValueAtTime(0.0001, schedTime + 3.8);
+
+    const renderedBuffer = await offlineCtx.startRendering();
+    return audioBufferToWav(renderedBuffer);
+  }
+
+  /**
+   * Downloads the currently selected track or original score to the player's device.
+   */
+  public async downloadTrack(trackId: SoundtrackId): Promise<void> {
+    const track = SOUNDTRACK_TRACKS.find((t) => t.id === trackId);
+    if (!track) return;
+
+    if (track.type === "file" && track.fileUrl) {
+      const a = document.createElement("a");
+      a.href = track.fileUrl;
+      a.download = `${track.title.replace(/\s+/g, "_")}_${trackId === "iron-crown-1" ? "Version_1" : "Version_2"}.mp3`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      // Export WAV from OfflineAudioContext
+      const wavBlob = await this.renderOriginalScoreWav();
+      const url = URL.createObjectURL(wavBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Iron_Bow_Broken_Crown_Original_Synthesizer_Score.wav";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+  }
 }
 
-export const musicEngine = new IronBowEngine();
+function writeString(view: DataView, offset: number, string: string): void {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i));
+  }
+}
+
+function audioBufferToWav(buffer: AudioBuffer): Blob {
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const bitDepth = 16;
+  const bytesPerSample = bitDepth / 8;
+  const blockAlign = numChannels * bytesPerSample;
+  const length = buffer.length;
+  const dataSize = length * blockAlign;
+  const headerSize = 44;
+  const totalSize = headerSize + dataSize;
+  const arrayBuffer = new ArrayBuffer(totalSize);
+  const view = new DataView(arrayBuffer);
+
+  // RIFF header
+  writeString(view, 0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(view, 8, "WAVE");
+
+  // fmt subchunk
+  writeString(view, 12, "fmt ");
+  view.setUint32(16, 16, true); // SubChunk1Size (16 for PCM)
+  view.setUint16(20, 1, true); // AudioFormat (1 = PCM)
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true); // ByteRate
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitDepth, true);
+
+  // data subchunk
+  writeString(view, 36, "data");
+  view.setUint32(40, dataSize, true);
+
+  // Write 16-bit interleaved PCM samples
+  let offset = 44;
+  const channels: Float32Array[] = [];
+  for (let c = 0; c < numChannels; c++) {
+    channels.push(buffer.getChannelData(c));
+  }
+  for (let i = 0; i < length; i++) {
+    for (let c = 0; c < numChannels; c++) {
+      let sample = channels[c][i];
+      sample = Math.max(-1, Math.min(1, sample));
+      const s = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+      view.setInt16(offset, s, true);
+      offset += 2;
+    }
+  }
+
+  return new Blob([arrayBuffer], { type: "audio/wav" });
+}
+
+export const musicEngine = new UnifiedMusicEngine();

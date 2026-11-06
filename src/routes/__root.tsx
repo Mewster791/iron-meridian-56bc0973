@@ -79,7 +79,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Iron Meridian" },
-      { name: "description", content: "Iron Meridian: Asymmetric Tactical Command" },
+      {
+        name: "description",
+        content:
+          "Iron Meridian: Asymmetric tactical command 3D game featuring an atmospheric city, floor-by-floor tactical combat, dynamic soundtrack selection, and campaign progression.",
+      },
+      { property: "og:title", content: "Iron Meridian" },
+      {
+        property: "og:description",
+        content:
+          "Iron Meridian: Asymmetric tactical command 3D game featuring an atmospheric city, floor-by-floor tactical combat, dynamic soundtrack selection, and campaign progression.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

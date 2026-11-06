@@ -12,52 +12,52 @@
  * This module is pure data + pure functions (tested); musicEngine.ts only plays it.
  */
 
-export const SONG_TITLE = 'Iron Bow, Broken Crown';
+export const SONG_TITLE = "Iron Bow, Broken Crown";
 
-export type Voice = 'contrabass' | 'cello' | 'violin';
-export type Articulation = 'legato' | 'marcato' | 'staccato' | 'spiccato' | 'tremolo';
+export type Voice = "contrabass" | "cello" | "violin";
+export type Articulation = "legato" | "marcato" | "staccato" | "spiccato" | "tremolo";
 
 /** Accompaniment figures the engine knows how to play. */
 export type Part =
-  | 'bassMarch' // aggressive staccato "boots in the mud" pulse
-  | 'bassDrone' // quiet bowed root under the verses
-  | 'bassHeartbeat' // bridge: low lub-dub
-  | 'bassLong' // chorus: thunderous bowed roots
-  | 'celloCounter' // verse 1b: sharp, urgent counter-melody
-  | 'celloChords' // chorus: heavy chord stabs
-  | 'celloJagged' // verse 2: syncopated, jagged rhythm
-  | 'spiccato' // pre-chorus / final chorus: fast driving bowing
-  | 'violinPiercing' // verse 2b: sharp, tragic high notes
-  | 'feverRun' // outro: violins climbing to fever pitch
-  | 'finalStabs'; // outro: heavy chords on each word, then the final chord
+  | "bassMarch" // aggressive staccato "boots in the mud" pulse
+  | "bassDrone" // quiet bowed root under the verses
+  | "bassHeartbeat" // bridge: low lub-dub
+  | "bassLong" // chorus: thunderous bowed roots
+  | "celloCounter" // verse 1b: sharp, urgent counter-melody
+  | "celloChords" // chorus: heavy chord stabs
+  | "celloJagged" // verse 2: syncopated, jagged rhythm
+  | "spiccato" // pre-chorus / final chorus: fast driving bowing
+  | "violinPiercing" // verse 2b: sharp, tragic high notes
+  | "feverRun" // outro: violins climbing to fever pitch
+  | "finalStabs"; // outro: heavy chords on each word, then the final chord
 
 export const PART_VOICES: Record<Part, Voice[]> = {
-  bassMarch: ['contrabass'],
-  bassDrone: ['contrabass'],
-  bassHeartbeat: ['contrabass'],
-  bassLong: ['contrabass'],
-  celloCounter: ['cello'],
-  celloChords: ['cello'],
-  celloJagged: ['cello'],
-  spiccato: ['violin', 'cello'],
-  violinPiercing: ['violin'],
-  feverRun: ['violin'],
-  finalStabs: ['contrabass', 'cello'],
+  bassMarch: ["contrabass"],
+  bassDrone: ["contrabass"],
+  bassHeartbeat: ["contrabass"],
+  bassLong: ["contrabass"],
+  celloCounter: ["cello"],
+  celloChords: ["cello"],
+  celloJagged: ["cello"],
+  spiccato: ["violin", "cello"],
+  violinPiercing: ["violin"],
+  feverRun: ["violin"],
+  finalStabs: ["contrabass", "cello"],
 };
 
 export type SectionId =
-  | 'INTRO'
-  | 'VERSE_1A'
-  | 'VERSE_1B'
-  | 'PRE_CHORUS'
-  | 'CHORUS_1'
-  | 'VERSE_2A'
-  | 'VERSE_2B'
-  | 'BRIDGE'
-  | 'CHORUS_2'
-  | 'OUTRO_CLIMAX'
-  | 'OUTRO_FINAL'
-  | 'TAIL';
+  | "INTRO"
+  | "VERSE_1A"
+  | "VERSE_1B"
+  | "PRE_CHORUS"
+  | "CHORUS_1"
+  | "VERSE_2A"
+  | "VERSE_2B"
+  | "BRIDGE"
+  | "CHORUS_2"
+  | "OUTRO_CLIMAX"
+  | "OUTRO_FINAL"
+  | "TAIL";
 
 export interface Chord {
   name: string;
@@ -67,12 +67,12 @@ export interface Chord {
   pcs: number[];
 }
 
-const Dm: Chord = { name: 'Dm', root: 38, pcs: [2, 5, 9] };
-const Bb: Chord = { name: 'Bb', root: 34, pcs: [10, 2, 5] };
-const Gm: Chord = { name: 'Gm', root: 31, pcs: [7, 10, 2] };
-const A: Chord = { name: 'A', root: 33, pcs: [9, 1, 4] };
-const F: Chord = { name: 'F', root: 29, pcs: [5, 9, 0] };
-const C: Chord = { name: 'C', root: 36, pcs: [0, 4, 7] };
+const Dm: Chord = { name: "Dm", root: 38, pcs: [2, 5, 9] };
+const Bb: Chord = { name: "Bb", root: 34, pcs: [10, 2, 5] };
+const Gm: Chord = { name: "Gm", root: 31, pcs: [7, 10, 2] };
+const A: Chord = { name: "A", root: 33, pcs: [9, 1, 4] };
+const F: Chord = { name: "F", root: 29, pcs: [5, 9, 0] };
+const C: Chord = { name: "C", root: 36, pcs: [0, 4, 7] };
 
 export interface LineSpec {
   /** Lyric with hyphenated syllables; UPPER CASE = stressed. */
@@ -164,223 +164,223 @@ const CHORUS_LINES: LineSpec[] = [
     stress: [0, 2, 4, 5, 7],
     steps: [0, 6, 8, 11, 12, 16, 18, 20, 22, 23, 24],
   },
-  { text: 'BREAK through the I-ron that SHACK-led the LAND!', stress: [6, 4, 3, 1] },
-  { text: 'the THIEVES in the PAL-ace have RUN out of TIME,', stress: [0, 2, 4, 5] },
-  { text: 'their CROWNS are a DEBT, and their RULE is a CRIME!', stress: [7, 5, 4, 1] },
-  { text: 'with a STRIKE of the BOW, let the TYR-an-ny FALL,', stress: [5, 7, 6, 8] },
-  { text: 'the MOTH-er-land WAKES to the RAL-ly-ing CALL!', stress: [7, 3, 4, 6] },
+  { text: "BREAK through the I-ron that SHACK-led the LAND!", stress: [6, 4, 3, 1] },
+  { text: "the THIEVES in the PAL-ace have RUN out of TIME,", stress: [0, 2, 4, 5] },
+  { text: "their CROWNS are a DEBT, and their RULE is a CRIME!", stress: [7, 5, 4, 1] },
+  { text: "with a STRIKE of the BOW, let the TYR-an-ny FALL,", stress: [5, 7, 6, 8] },
+  { text: "the MOTH-er-land WAKES to the RAL-ly-ing CALL!", stress: [7, 3, 4, 6] },
 ];
 
 export const SECTIONS: SectionSpec[] = [
   {
-    id: 'INTRO',
-    title: 'Intro',
+    id: "INTRO",
+    title: "Intro",
     bars: 8,
     bpm: [92, 92],
     chords: [Dm, Dm, Dm, Dm, Bb, Bb, A, A],
-    voice: 'cello',
-    articulation: 'legato',
+    voice: "cello",
+    articulation: "legato",
     base: 50,
     lines: [],
     extraNotes: INTRO_LAMENT,
-    parts: ['bassMarch'],
+    parts: ["bassMarch"],
     dynamics: [0.55, 0.7],
   },
   {
-    id: 'VERSE_1A',
-    title: 'Verse 1',
+    id: "VERSE_1A",
+    title: "Verse 1",
     bars: 8,
     bpm: [92, 92],
     chords: VERSE_A_CHORDS,
-    voice: 'cello',
-    articulation: 'legato',
+    voice: "cello",
+    articulation: "legato",
     base: 50,
     lines: verse(
       [
-        'DEEP in the SOIL, the I-ron grows COLD,',
-        'UN-der the WEIGHT of a CROWN bought and SOLD.',
-        'they SIT in high TOW-ers, they DINE on our TEARS,',
-        'they LOCK up our VOIC-es and FEED on our FEARS.',
+        "DEEP in the SOIL, the I-ron grows COLD,",
+        "UN-der the WEIGHT of a CROWN bought and SOLD.",
+        "they SIT in high TOW-ers, they DINE on our TEARS,",
+        "they LOCK up our VOIC-es and FEED on our FEARS.",
       ],
-      VERSE_A_CONTOUR
+      VERSE_A_CONTOUR,
     ),
-    parts: ['bassMarch', 'bassDrone'],
+    parts: ["bassMarch", "bassDrone"],
     dynamics: [0.7, 0.76],
   },
   {
-    id: 'VERSE_1B',
-    title: 'Verse 1 (cello rises)',
+    id: "VERSE_1B",
+    title: "Verse 1 (cello rises)",
     bars: 8,
     bpm: [92, 92],
     chords: VERSE_B_CHORDS,
-    voice: 'cello',
-    articulation: 'legato',
+    voice: "cello",
+    articulation: "legato",
     base: 50,
     lines: verse(
       [
-        'but THRONES made of STONE are des-TINED to CRACK,',
-        'the DIRT in our FIN-ger-nails is CLAW-ing its way BACK.',
-        'they BLEED the ho-RI-zon, they POI-son the SPRING,',
-        'but a SI-lent COUN-try is a DAN-ger-ous THING.',
+        "but THRONES made of STONE are des-TINED to CRACK,",
+        "the DIRT in our FIN-ger-nails is CLAW-ing its way BACK.",
+        "they BLEED the ho-RI-zon, they POI-son the SPRING,",
+        "but a SI-lent COUN-try is a DAN-ger-ous THING.",
       ],
-      VERSE_B_CONTOUR
+      VERSE_B_CONTOUR,
     ),
-    parts: ['bassMarch', 'bassDrone', 'celloCounter'],
+    parts: ["bassMarch", "bassDrone", "celloCounter"],
     dynamics: [0.78, 0.85],
   },
   {
-    id: 'PRE_CHORUS',
-    title: 'Pre-chorus',
+    id: "PRE_CHORUS",
+    title: "Pre-chorus",
     bars: 10,
     bpm: [92, 104],
     chords: [Bb, Bb, C, C, Gm, Gm, A, A, A, A],
-    voice: 'cello',
-    articulation: 'legato',
+    voice: "cello",
+    articulation: "legato",
     base: 50,
     lines: [
-      { text: 'LIS-ten CLOSE to the WOOD and the WIRE,', stress: [2, 5, 7, 9] },
-      { text: 'EV-ery BREATH is a SPARK for the FIRE.', stress: [6, 8, 10, 8] },
-      { text: 'they have TAK-en the HAR-vest, the HOUSE, and the NAME,', stress: [7, 10, 7, 5] },
-      { text: 'but they LEFT us the ASH...', stress: [4, 6] },
+      { text: "LIS-ten CLOSE to the WOOD and the WIRE,", stress: [2, 5, 7, 9] },
+      { text: "EV-ery BREATH is a SPARK for the FIRE.", stress: [6, 8, 10, 8] },
+      { text: "they have TAK-en the HAR-vest, the HOUSE, and the NAME,", stress: [7, 10, 7, 5] },
+      { text: "but they LEFT us the ASH...", stress: [4, 6] },
       { text: "and we're BRING-ing the FLAME.", stress: [8, 11] },
     ],
-    parts: ['bassMarch', 'spiccato'],
+    parts: ["bassMarch", "spiccato"],
     dynamics: [0.8, 1],
   },
   {
-    id: 'CHORUS_1',
-    title: 'Chorus',
+    id: "CHORUS_1",
+    title: "Chorus",
     bars: 12,
     bpm: [104, 104],
     chords: CHORUS_CHORDS,
-    voice: 'violin',
-    articulation: 'marcato',
+    voice: "violin",
+    articulation: "marcato",
     base: 74,
     lines: CHORUS_LINES,
-    parts: ['bassLong', 'celloChords'],
+    parts: ["bassLong", "celloChords"],
     dynamics: [1, 1],
   },
   {
-    id: 'VERSE_2A',
-    title: 'Verse 2',
+    id: "VERSE_2A",
+    title: "Verse 2",
     bars: 8,
     bpm: [104, 104],
     chords: VERSE_A_CHORDS,
-    voice: 'cello',
-    articulation: 'marcato',
+    voice: "cello",
+    articulation: "marcato",
     base: 50,
     lines: verse(
       [
-        'they CALL it a PEACE when they SI-lence the STREET,',
-        'they COUNT up their GOLD at the COST of de-FEAT.',
-        'un-WOR-thy to RULE, they are HOL-low and BLIND,',
-        'LEAV-ing noth-ing but CHAINS and SHAD-ows be-HIND.',
+        "they CALL it a PEACE when they SI-lence the STREET,",
+        "they COUNT up their GOLD at the COST of de-FEAT.",
+        "un-WOR-thy to RULE, they are HOL-low and BLIND,",
+        "LEAV-ing noth-ing but CHAINS and SHAD-ows be-HIND.",
       ],
-      VERSE_A_CONTOUR
+      VERSE_A_CONTOUR,
     ),
-    parts: ['bassMarch', 'celloJagged'],
+    parts: ["bassMarch", "celloJagged"],
     dynamics: [0.85, 0.88],
   },
   {
-    id: 'VERSE_2B',
-    title: 'Verse 2 (violins enter)',
+    id: "VERSE_2B",
+    title: "Verse 2 (violins enter)",
     bars: 8,
     bpm: [104, 104],
     chords: VERSE_B_CHORDS,
-    voice: 'cello',
-    articulation: 'marcato',
+    voice: "cello",
+    articulation: "marcato",
     base: 50,
     lines: verse(
       [
-        'but the BLOOD of the FAL-len still CRIES from the STONE,',
-        'a NA-tion a-LIVE can-not BLEED for a THRONE.',
-        'the MAS-ters will LEARN what the DOWN-trod-den KNOW:',
-        'the HIGH-er the TOW-er, the HARD-er the BLOW.',
+        "but the BLOOD of the FAL-len still CRIES from the STONE,",
+        "a NA-tion a-LIVE can-not BLEED for a THRONE.",
+        "the MAS-ters will LEARN what the DOWN-trod-den KNOW:",
+        "the HIGH-er the TOW-er, the HARD-er the BLOW.",
       ],
-      VERSE_B_CONTOUR
+      VERSE_B_CONTOUR,
     ),
-    parts: ['bassMarch', 'celloJagged', 'violinPiercing'],
+    parts: ["bassMarch", "celloJagged", "violinPiercing"],
     dynamics: [0.9, 0.95],
   },
   {
-    id: 'BRIDGE',
-    title: 'Bridge',
+    id: "BRIDGE",
+    title: "Bridge",
     bars: 12,
     bpm: [104, 104],
     chords: [Dm, Dm, Bb, Bb, Gm, Gm, Bb, Bb, Gm, Gm, A, A],
-    voice: 'violin',
-    articulation: 'tremolo',
+    voice: "violin",
+    articulation: "tremolo",
     base: 62,
     lines: [
-      { text: 'no MOD-ern ma-CHINES. no MER-cy. no GRACE.', stress: [4, 2, 4, 0] },
-      { text: 'just the STRENGTH of our HANDS to re-CLAIM this PLACE.', stress: [5, 7, 9, 7] },
-      { text: 'can you HEAR it?', stress: [7] },
-      { text: 'the BREAK-ing of CHAINS?', stress: [7, 9] },
-      { text: 'the ICE is now MELT-ing...', stress: [10, 12] },
-      { text: 'to FLOOD through our VEINS!', stress: [11, 13] },
+      { text: "no MOD-ern ma-CHINES. no MER-cy. no GRACE.", stress: [4, 2, 4, 0] },
+      { text: "just the STRENGTH of our HANDS to re-CLAIM this PLACE.", stress: [5, 7, 9, 7] },
+      { text: "can you HEAR it?", stress: [7] },
+      { text: "the BREAK-ing of CHAINS?", stress: [7, 9] },
+      { text: "the ICE is now MELT-ing...", stress: [10, 12] },
+      { text: "to FLOOD through our VEINS!", stress: [11, 13] },
     ],
-    parts: ['bassHeartbeat'],
+    parts: ["bassHeartbeat"],
     dynamics: [0.3, 0.95],
   },
   {
-    id: 'CHORUS_2',
-    title: 'Chorus (maximum intensity)',
+    id: "CHORUS_2",
+    title: "Chorus (maximum intensity)",
     bars: 12,
     bpm: [104, 104],
     chords: CHORUS_CHORDS,
-    voice: 'violin',
-    articulation: 'marcato',
+    voice: "violin",
+    articulation: "marcato",
     base: 74,
     lines: CHORUS_LINES,
     doubling: -12,
-    parts: ['bassLong', 'bassMarch', 'celloChords', 'spiccato'],
+    parts: ["bassLong", "bassMarch", "celloChords", "spiccato"],
     dynamics: [1.1, 1.15],
   },
   {
-    id: 'OUTRO_CLIMAX',
-    title: 'Outro (fever pitch)',
+    id: "OUTRO_CLIMAX",
+    title: "Outro (fever pitch)",
     bars: 4,
     bpm: [104, 104],
     chords: [Dm, Bb, F, C],
-    voice: 'violin',
-    articulation: 'marcato',
+    voice: "violin",
+    articulation: "marcato",
     base: 74,
     lines: [
-      { text: 'the CROWN hits the FLOOR.', stress: [9, 11] },
-      { text: 'the PEO-ple are FREE.', stress: [9, 12] },
+      { text: "the CROWN hits the FLOOR.", stress: [9, 11] },
+      { text: "the PEO-ple are FREE.", stress: [9, 12] },
     ],
-    parts: ['bassLong', 'celloChords', 'feverRun'],
+    parts: ["bassLong", "celloChords", "feverRun"],
     dynamics: [1.15, 1.25],
   },
   {
-    id: 'OUTRO_FINAL',
-    title: 'Outro (final chord)',
+    id: "OUTRO_FINAL",
+    title: "Outro (final chord)",
     bars: 6,
     bpm: [104, 104],
     chords: [Bb, A, Dm, Dm, Dm, Dm],
-    voice: 'cello',
-    articulation: 'marcato',
+    voice: "cello",
+    articulation: "marcato",
     base: 50,
     lines: [
       {
-        text: 'the LAND be-LONGS... to US.',
+        text: "the LAND be-LONGS... to US.",
         stress: [5, 4, 7],
         bars: 6,
         steps: [4, 8, 12, 16, 30, 32],
         degrees: [4, 5, 4, 4, 6, 7],
       },
     ],
-    parts: ['finalStabs'],
+    parts: ["finalStabs"],
     dynamics: [1.2, 1.2],
   },
   {
-    id: 'TAIL',
-    title: 'Silence before the song starts again',
+    id: "TAIL",
+    title: "Silence before the song starts again",
     bars: 4,
     bpm: [104, 104],
     chords: [Dm, Dm, Dm, Dm],
-    voice: 'cello',
-    articulation: 'legato',
+    voice: "cello",
+    articulation: "legato",
     base: 50,
     lines: [],
     parts: [],
@@ -399,7 +399,7 @@ export interface Syllable {
 
 export const syllables = (line: string): Syllable[] =>
   line
-    .replace(/[!?.,;:]/g, ' ')
+    .replace(/[!?.,;:]/g, " ")
     .split(/[\s-]+/)
     .filter(Boolean)
     .map((text) => ({ text, stressed: /[A-Z]/.test(text) && text === text.toUpperCase() }));
@@ -426,7 +426,8 @@ export const snapToChord = (midi: number, chord: Chord): number => {
 /** Chord tones at or above `low`, ascending. */
 export const chordTones = (chord: Chord, low: number, count: number): number[] => {
   const out: number[] = [];
-  for (let m = low; out.length < count && m < low + 60; m++) if (chord.pcs.includes(mod(m, 12))) out.push(m);
+  for (let m = low; out.length < count && m < low + 60; m++)
+    if (chord.pcs.includes(mod(m, 12))) out.push(m);
   return out;
 };
 
@@ -546,7 +547,11 @@ export function buildSong(specs: SectionSpec[] = SECTIONS): Song {
     return sec.chords[Math.floor((mod(abs, totalSteps) - sec.startStep) / 16)];
   };
   const dynAt = (sec: SongSection, abs: number) =>
-    lerp(sec.dynamics[0], sec.dynamics[1], Math.min(1, Math.max(0, (abs - sec.startStep) / sec.steps)));
+    lerp(
+      sec.dynamics[0],
+      sec.dynamics[1],
+      Math.min(1, Math.max(0, (abs - sec.startStep) / sec.steps)),
+    );
 
   const melody: ScoreNote[] = [];
   for (const sec of sections) {
@@ -598,7 +603,13 @@ export function buildSong(specs: SectionSpec[] = SECTIONS): Song {
     });
     for (const { end: _end, ...nt } of notes) {
       melody.push(nt);
-      if (sec.doubling) melody.push({ ...nt, midi: nt.midi + sec.doubling, velocity: nt.velocity * 0.7, doubled: true });
+      if (sec.doubling)
+        melody.push({
+          ...nt,
+          midi: nt.midi + sec.doubling,
+          velocity: nt.velocity * 0.7,
+          doubled: true,
+        });
     }
   }
 

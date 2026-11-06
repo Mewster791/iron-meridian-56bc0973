@@ -1,5 +1,5 @@
-import { MISSIONS, Mission, MissionStep } from './campaignData';
-import { Building, LootKind, getBuildingEntrance, getCityLayout } from '../city/cityLayout';
+import { MISSIONS, Mission, MissionStep } from "./campaignData";
+import { Building, LootKind, getBuildingEntrance, getCityLayout } from "../city/cityLayout";
 
 export interface CampaignProgress {
   missionIndex: number;
@@ -58,7 +58,10 @@ export function markFloorCleared(p: CampaignProgress, floor: number): CampaignPr
 }
 
 /** A building is only cleared once every one of its floors is cleared. */
-export function isBuildingFullyCleared(clearedFloors: number[], building: Pick<Building, 'floors'>): boolean {
+export function isBuildingFullyCleared(
+  clearedFloors: number[],
+  building: Pick<Building, "floors">,
+): boolean {
   for (let f = 0; f < building.floors; f++) {
     if (!clearedFloors.includes(f)) return false;
   }
@@ -79,7 +82,12 @@ export function canStartHoldAction(guardsRemaining: number): boolean {
 }
 
 /** Hold-to-act progress. Releasing [E] or getting shot drains progress instead of keeping it. */
-export function stepHoldProgress(progressSec: number, dt: number, holding: boolean, tookDamage: boolean): number {
+export function stepHoldProgress(
+  progressSec: number,
+  dt: number,
+  holding: boolean,
+  tookDamage: boolean,
+): number {
   if (tookDamage) return 0;
   if (holding) return progressSec + dt;
   return Math.max(0, progressSec - dt * 2);
@@ -129,7 +137,7 @@ export function jumpToMission(p: CampaignProgress, missionIndex: number): Campai
   const before = MISSIONS.slice(0, idx);
   const destroyed = new Set<string>();
   for (const m of before) {
-    for (const s of m.steps) if (s.type === 'DETONATE' && s.buildingId) destroyed.add(s.buildingId);
+    for (const s of m.steps) if (s.type === "DETONATE" && s.buildingId) destroyed.add(s.buildingId);
   }
   return {
     ...p,
@@ -151,7 +159,10 @@ export function jumpToStep(p: CampaignProgress, stepIndex: number): CampaignProg
 }
 
 /** Going down costs scrap and a walk back from the safehouse; cleared floors are kept as checkpoints. */
-export function applyDeath(p: CampaignProgress, scrap: number): { progress: CampaignProgress; scrapAfter: number; scrapLost: number } {
+export function applyDeath(
+  p: CampaignProgress,
+  scrap: number,
+): { progress: CampaignProgress; scrapAfter: number; scrapLost: number } {
   const scrapLost = Math.floor(scrap * DEATH_SCRAP_PENALTY);
   return { progress: { ...p, deaths: p.deaths + 1 }, scrapAfter: scrap - scrapLost, scrapLost };
 }
@@ -172,42 +183,59 @@ export interface LootReward {
 }
 
 export function rollLootReward(kind: LootKind, roll: number): LootReward {
-  const base: LootReward = { ammo: 0, medkits: 0, armor: 0, scrap: 0, plates: 0, chips: 0, dossier: false, label: '' };
+  const base: LootReward = {
+    ammo: 0,
+    medkits: 0,
+    armor: 0,
+    scrap: 0,
+    plates: 0,
+    chips: 0,
+    dossier: false,
+    label: "",
+  };
   switch (kind) {
-    case 'AMMO': {
+    case "AMMO": {
       const ammo = 30 + Math.floor(roll * 31);
       return { ...base, ammo, label: `+${ammo} rounds` };
     }
-    case 'MEDKIT':
-      return { ...base, medkits: 1, label: '+1 medkit' };
-    case 'ARMOR': {
+    case "MEDKIT":
+      return { ...base, medkits: 1, label: "+1 medkit" };
+    case "ARMOR": {
       const armor = 25 + Math.floor(roll * 26);
       return { ...base, armor, label: `+${armor}% plate armor` };
     }
-    case 'SALVAGE': {
+    case "SALVAGE": {
       const scrap = 6 + Math.floor(roll * 10);
       const plates = roll > 0.8 ? 1 : 0;
       const chips = roll > 0.93 ? 1 : 0;
-      return { ...base, scrap, plates, chips, label: `+${scrap} alloy${plates ? ' · +1 plate' : ''}${chips ? ' · +1 chip' : ''}` };
+      return {
+        ...base,
+        scrap,
+        plates,
+        chips,
+        label: `+${scrap} alloy${plates ? " · +1 plate" : ""}${chips ? " · +1 chip" : ""}`,
+      };
     }
-    case 'DOSSIER':
-      return { ...base, scrap: 10, dossier: true, label: 'Dossier recovered · +10 alloy' };
+    case "DOSSIER":
+      return { ...base, scrap: 10, dossier: true, label: "Dossier recovered · +10 alloy" };
   }
 }
 
 export function getStepBuilding(step: MissionStep | null): Building | null {
   if (!step) return null;
-  if (step.type === 'RETURN_SAFEHOUSE') return getCityLayout().byId.get('safehouse') ?? null;
+  if (step.type === "RETURN_SAFEHOUSE") return getCityLayout().byId.get("safehouse") ?? null;
   return step.buildingId ? (getCityLayout().byId.get(step.buildingId) ?? null) : null;
 }
 
 /** World point the HUD waypoint points at for a step (null when it follows a moving target). */
-export function getStepWaypoint(step: MissionStep | null): { x: number; z: number; y: number } | null {
+export function getStepWaypoint(
+  step: MissionStep | null,
+): { x: number; z: number; y: number } | null {
   if (!step) return null;
   if (step.zone) return { x: step.zone.x, z: step.zone.z, y: 0 };
   const b = getStepBuilding(step);
   if (!b) return null;
-  if (step.type === 'TRAVEL' || step.type === 'RETURN_SAFEHOUSE') {
+  if (step.type === "TRAVEL" || step.type === "RETURN_SAFEHOUSE") {
     const e = getBuildingEntrance(b);
     return { x: e.x, z: e.z, y: 0 };
   }

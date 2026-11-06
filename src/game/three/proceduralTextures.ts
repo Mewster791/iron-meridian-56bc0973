@@ -1,10 +1,10 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
 export enum AtmospherePreset {
-  ALPINE_DAYLIGHT = 'ALPINE_DAYLIGHT',
-  GOLDEN_DUSK = 'GOLDEN_DUSK',
-  OVERCAST_STORM = 'OVERCAST_STORM',
-  NIGHT_NVG = 'NIGHT_NVG',
+  ALPINE_DAYLIGHT = "ALPINE_DAYLIGHT",
+  GOLDEN_DUSK = "GOLDEN_DUSK",
+  OVERCAST_STORM = "OVERCAST_STORM",
+  NIGHT_NVG = "NIGHT_NVG",
 }
 
 export interface AtmosphereConfig {
@@ -24,58 +24,58 @@ export interface AtmosphereConfig {
 
 export const ATMOSPHERE_CONFIGS: Record<AtmospherePreset, AtmosphereConfig> = {
   [AtmospherePreset.ALPINE_DAYLIGHT]: {
-    label: 'Alpine Daylight',
-    skyZenith: '#2c537a',
-    skyHorizon: '#9cb4c9',
-    sunColor: '#fff3db',
+    label: "Alpine Daylight",
+    skyZenith: "#2c537a",
+    skyHorizon: "#9cb4c9",
+    sunColor: "#fff3db",
     sunIntensity: 2.35,
     sunPosition: [75, 105, 48],
-    hemiSky: '#b9d6f2',
-    hemiGround: '#3a4635',
+    hemiSky: "#b9d6f2",
+    hemiGround: "#3a4635",
     hemiIntensity: 0.88,
-    fogColor: '#95adc2',
+    fogColor: "#95adc2",
     fogDensity: 0.0036,
     exposure: 1.08,
   },
   [AtmospherePreset.GOLDEN_DUSK]: {
-    label: 'Golden Dusk',
-    skyZenith: '#1e2c4a',
-    skyHorizon: '#d98a5b',
-    sunColor: '#ffab5e',
+    label: "Golden Dusk",
+    skyZenith: "#1e2c4a",
+    skyHorizon: "#d98a5b",
+    sunColor: "#ffab5e",
     sunIntensity: 2.6,
     sunPosition: [-110, 36, 65],
-    hemiSky: '#f0b284',
-    hemiGround: '#2d2823',
+    hemiSky: "#f0b284",
+    hemiGround: "#2d2823",
     hemiIntensity: 0.72,
-    fogColor: '#b88268',
+    fogColor: "#b88268",
     fogDensity: 0.0044,
     exposure: 1.05,
   },
   [AtmospherePreset.OVERCAST_STORM]: {
-    label: 'Overcast Storm',
-    skyZenith: '#2a333d',
-    skyHorizon: '#63707d',
-    sunColor: '#cbd8e6',
+    label: "Overcast Storm",
+    skyZenith: "#2a333d",
+    skyHorizon: "#63707d",
+    sunColor: "#cbd8e6",
     sunIntensity: 1.35,
     sunPosition: [30, 95, -40],
-    hemiSky: '#8fa1b3',
-    hemiGround: '#29302a',
+    hemiSky: "#8fa1b3",
+    hemiGround: "#29302a",
     hemiIntensity: 0.95,
-    fogColor: '#616e7a',
+    fogColor: "#616e7a",
     fogDensity: 0.0062,
     exposure: 1.02,
   },
   [AtmospherePreset.NIGHT_NVG]: {
-    label: 'Night Ops (Phosphor)',
-    skyZenith: '#051310',
-    skyHorizon: '#103028',
-    sunColor: '#6ee7b7',
+    label: "Night Ops (Phosphor)",
+    skyZenith: "#051310",
+    skyHorizon: "#103028",
+    sunColor: "#6ee7b7",
     sunIntensity: 1.15,
     sunPosition: [-50, 85, -50],
-    hemiSky: '#34d399',
-    hemiGround: '#091c16',
+    hemiSky: "#34d399",
+    hemiGround: "#091c16",
     hemiIntensity: 0.78,
-    fogColor: '#0c261f',
+    fogColor: "#0c261f",
     fogDensity: 0.0048,
     exposure: 1.25,
   },
@@ -96,9 +96,9 @@ export function createProceduralSkyDome(): {
   };
 } {
   const uniforms = {
-    uZenithColor: { value: new THREE.Color('#2c537a') },
-    uHorizonColor: { value: new THREE.Color('#9cb4c9') },
-    uSunColor: { value: new THREE.Color('#fff3db') },
+    uZenithColor: { value: new THREE.Color("#2c537a") },
+    uHorizonColor: { value: new THREE.Color("#9cb4c9") },
+    uSunColor: { value: new THREE.Color("#fff3db") },
     uSunDir: { value: new THREE.Vector3(75, 105, 48).normalize() },
     uTime: { value: 0 },
   };
@@ -178,9 +178,7 @@ export interface ProceduralMaterialLibrary {
   dispose: () => void;
 }
 
-export function createProceduralMaterialLibrary(
-  maxAnisotropy: number
-): ProceduralMaterialLibrary {
+export function createProceduralMaterialLibrary(maxAnisotropy: number): ProceduralMaterialLibrary {
   // 1. High-frequency organic terrain micro-bump map (granite/soil grain)
   const size = 256;
   const bumpData = new Uint8Array(size * size * 4);
@@ -226,23 +224,23 @@ export function createProceduralMaterialLibrary(
 
   // 3. Tactical Vehicle Digital Splinter Camo Textures (sRGB)
   const buildCamo = (base: string, patchA: string, patchB: string) => {
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = 256;
     canvas.height = 256;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (ctx) {
       ctx.fillStyle = base;
       ctx.fillRect(0, 0, 256, 256);
       for (let i = 0; i < 48; i++) {
         ctx.fillStyle = i % 2 === 0 ? patchA : patchB;
-        const px = ((i * 53) % 240);
-        const py = ((i * 97) % 240);
+        const px = (i * 53) % 240;
+        const py = (i * 97) % 240;
         const pw = 24 + (i % 4) * 12;
         const ph = 14 + (i % 3) * 10;
         ctx.fillRect(px, py, pw, ph);
       }
       // Subtle armor panel weld seams
-      ctx.strokeStyle = 'rgba(0,0,0,0.28)';
+      ctx.strokeStyle = "rgba(0,0,0,0.28)";
       ctx.lineWidth = 2;
       ctx.strokeRect(4, 4, 248, 248);
       ctx.beginPath();
@@ -258,8 +256,8 @@ export function createProceduralMaterialLibrary(
     return tex;
   };
 
-  const camoEastAlbedo = buildCamo('#334235', '#243026', '#4a5744');
-  const camoWestAlbedo = buildCamo('#525849', '#3d4237', '#6e6956');
+  const camoEastAlbedo = buildCamo("#334235", "#243026", "#4a5744");
+  const camoWestAlbedo = buildCamo("#525849", "#3d4237", "#6e6956");
 
   return {
     terrainDetailBump,
