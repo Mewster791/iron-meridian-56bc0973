@@ -631,6 +631,8 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
     let convoyDestroyedCooldown = 0;
     /** Latched when the convoy dies; the mission director consumes it (tracers resolve after the director each frame). */
     let convoyKillPending = false;
+    let lastAnnouncedFloor = -1;
+    let lastAnnouncedBuildingId: string | null = null;
 
     // ---- Enemy actors (street patrols, building garrisons, guards, high-value targets, assault waves) ----
     const enemies: EnemyActor[] = [];
@@ -699,15 +701,20 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       if (idx !== -1) enemies.splice(idx, 1);
     };
 
-    // Street patrols hold intersections and respawn slowly once you are out of sight.
-    const streetSlots: Array<{ x: number; z: number; enemy: EnemyActor | null; respawn: number }> =
-      [];
+    // Street patrols: fixed set of checkpoint guards across the city (never respawn once defeated)
+    const streetSlots: Array<{
+      x: number;
+      z: number;
+      enemy: EnemyActor | null;
+      killed: boolean;
+      hp?: number;
+    }> = [];
     for (let i = 1; i < BLOCKS_PER_SIDE; i += 2) {
       for (let j = 0; j < BLOCKS_PER_SIDE; j++) {
         const x = blockCenter(i) - 26;
         const z = blockCenter(j) + 8;
         if (Math.hypot(x - safeEntrance.x, z - safeEntrance.z) < 55) continue;
-        streetSlots.push({ x, z, enemy: null, respawn: 0 });
+        streetSlots.push({ x, z, enemy: null, killed: false });
       }
     }
     const streetSlotOf = new Map<EnemyActor, number>();
@@ -815,7 +822,8 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         const slot = streetSlotOf.get(e);
         if (slot !== undefined) {
           streetSlots[slot].enemy = null;
-          streetSlots[slot].respawn = 120;
+          streetSlots[slot].killed = true; // Permanently neutralized — street patrols do not respawn
+          callbacksRef.current.onToast("Street patrol neutralized");
         }
         streetSlotOf.delete(e);
       }
@@ -1786,10 +1794,13 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       }
 
       const baseGroundY = sampleCitySupport(_playerPos.x, _playerPos.z, prevPlayerY);
-      // Stick to stairs when walking down instead of floating off each step.
-      const dropToGround = prevPlayerY - baseGroundY;
-      if (playerGrounded && verticalVel <= 0 && dropToGround > 0 && dropToGround < 0.7) {
-        _playerPos.y = baseGroundY;
+      // Smooth, continuous stair adherence when climbing or descending stairs
+      const stepDelta = baseGroundY - prevPlayerY;
+      if (playerGrounded && verticalVel <= 0) {
+        if (stepDelta >= -0.95 && stepDelta <= 0.85) {
+          _playerPos.y = baseGroundY;
+          verticalVel = 0;
+        }
       }
 
       if (!simPausedRef.current && keysDown["Space"] && playerGrounded) {
@@ -2266,6 +2277,21 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
       // G. Mission director + enemy AI (street patrols, floor garrisons, guards, targets, assault waves)
       const playerBuilding = findBuildingAt(_playerPos.x, _playerPos.z, 0.1);
       const playerFloor = playerBuilding ? getFloorAt(playerBuilding, _playerPos.y) : -1;
+
+      // Floor transition announcement toast
+      if (playerBuilding) {
+        if (playerFloor !== lastAnnouncedFloor || playerBuilding.id !== lastAnnouncedBuildingId) {
+          lastAnnouncedFloor = playerFloor;
+          lastAnnouncedBuildingId = playerBuilding.id;
+          const floorLabel = playerFloor === 0 ? "Ground Level" : `Level ${playerFloor + 1}`;
+          callbacksRef.current.onToast(`${playerBuilding.name} · ${floorLabel}`);
+        }
+      } else if (lastAnnouncedBuildingId !== null) {
+        lastAnnouncedFloor = -1;
+        lastAnnouncedBuildingId = null;
+        callbacksRef.current.onToast("Streets of Varos-Meridian");
+      }
+
       if (!simPausedRef.current) {
         updateDirector(dt, playerBuilding, playerFloor, !!keysDown["KeyE"], detonateJustPressed);
       }
@@ -2273,10 +2299,10 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
 
       if (dt > 0) {
         streetSlots.forEach((slot, idx) => {
+          if (slot.killed) return; // Permanently defeated — street patrols do not respawn
           const dist = Math.hypot(slot.x - _playerPos.x, slot.z - _playerPos.z);
           if (!slot.enemy) {
-            slot.respawn -= dt;
-            if (slot.respawn <= 0 && dist > 50 && dist < 105) {
+            if (dist > 35 && dist < 115) {
               slot.enemy = spawnEnemy({
                 kind: "STREET",
                 x: slot.x,
@@ -2284,14 +2310,15 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
                 y: 0,
                 bounds: null,
                 floor: 0,
+                hp: slot.hp,
               });
               streetSlotOf.set(slot.enemy, idx);
             }
-          } else if (dist > 135) {
+          } else if (dist > 145) {
+            slot.hp = slot.enemy.hp;
             streetSlotOf.delete(slot.enemy);
             despawnEnemy(slot.enemy);
             slot.enemy = null;
-            slot.respawn = 0;
           }
         });
       }
@@ -2689,7 +2716,7 @@ export const TacticalArena3D: React.FC<TacticalArena3DProps> = ({
         callbacksRef.current.onSyncLiveCoords(pCoords, vCoords, cCoords);
 
         directorHud.locationLabel = playerBuilding
-          ? `${playerBuilding.name} · Floor ${playerFloor + 1} of ${playerBuilding.floors}`
+          ? `${playerBuilding.name} · Level ${playerFloor + 1} of ${playerBuilding.floors} (${(playerFloor * 3.6).toFixed(1)}m Elev)`
           : "Streets of Varos-Meridian";
         setMissionHud({ ...directorHud });
         setMapWaypoint(directorWaypoint ? { x: directorWaypoint.x, z: directorWaypoint.z } : null);

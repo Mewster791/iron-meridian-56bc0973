@@ -182,6 +182,10 @@ class UnifiedMusicEngine {
     return this.currentTrack;
   }
 
+  public getActiveTrack(): SoundtrackId {
+    return this.currentTrack;
+  }
+
   public setTrack(trackId: SoundtrackId): void {
     if (this.currentTrack === trackId) return;
     this.currentTrack = trackId;
@@ -198,6 +202,10 @@ class UnifiedMusicEngine {
       this.stopCurrent();
     }
     this.notify();
+  }
+
+  public setActiveTrack(trackId: SoundtrackId): void {
+    this.setTrack(trackId);
   }
 
   public start(): void {

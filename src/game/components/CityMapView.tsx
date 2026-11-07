@@ -1,8 +1,14 @@
 import React, { useMemo, useRef } from "react";
-import { BLOCK_SIZE, CITY_HALF_EXTENT, getCityLayout } from "../city/cityLayout";
+import {
+  BLOCK_SIZE,
+  CITY_HALF_EXTENT,
+  findBuildingAt,
+  getCityLayout,
+  getFloorAt,
+} from "../city/cityLayout";
 
 interface CityMapViewProps {
-  playerCoords?: { x: number; z: number; yaw: number };
+  playerCoords?: { x: number; z: number; yaw: number; y?: number };
   vehicleCoords?: { x: number; z: number };
   squadTargetCoords?: { x: number; z: number } | null;
   convoyCoords?: { x: number; z: number; intact: boolean };
@@ -42,6 +48,14 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
         }
       : { x: -ext, y: -ext, w: ext * 2, h: ext * 2 };
   const k = compactMinimap ? 0.65 : 1; // marker scale
+
+  const currentBuilding = playerCoords ? findBuildingAt(playerCoords.x, playerCoords.z, 0.2) : null;
+  const currentFloor =
+    currentBuilding && playerCoords?.y !== undefined
+      ? getFloorAt(currentBuilding, playerCoords.y)
+      : currentBuilding
+        ? 0
+        : -1;
 
   const handleClick = (e: React.MouseEvent<SVGSVGElement>) => {
     if (!onClickMapWorldPoint || !svgRef.current) return;
@@ -114,6 +128,35 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
               strokeWidth={(isTarget ? 1.4 : 0.5) * k}
               strokeDasharray={isDestroyed ? `${2 * k} ${2 * k}` : undefined}
             />
+            {/* Stairwell core indicator */}
+            {!isDestroyed && (
+              <g>
+                <rect
+                  x={b.core.minX}
+                  y={b.core.minZ}
+                  width={b.core.maxX - b.core.minX}
+                  height={b.core.maxZ - b.core.minZ}
+                  fill="#0b111a"
+                  stroke="#f59e0b"
+                  strokeWidth={0.5 * k}
+                />
+                {Array.from({ length: 4 }).map((_, stepIdx) => {
+                  const sy = b.core.minZ + ((stepIdx + 1) / 5) * (b.core.maxZ - b.core.minZ);
+                  return (
+                    <line
+                      key={stepIdx}
+                      x1={b.core.minX + 0.3}
+                      y1={sy}
+                      x2={b.core.maxX - 0.3}
+                      y2={sy}
+                      stroke="#f59e0b"
+                      strokeOpacity="0.8"
+                      strokeWidth={0.4 * k}
+                    />
+                  );
+                })}
+              </g>
+            )}
             {!compactMinimap && b.isSpecial && (
               <text
                 x={(b.footprint.minX + b.footprint.maxX) / 2}
@@ -187,16 +230,68 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
       )}
 
       {playerCoords && (
-        <g
-          transform={`translate(${playerCoords.x}, ${playerCoords.z}) rotate(${(-playerCoords.yaw * 180) / Math.PI}) scale(${k})`}
-        >
-          <polygon points="0,0 -18,-30 18,-30" fill="rgba(56,189,248,0.16)" />
-          <polygon
-            points="0,-8 5.5,6.5 0,3.2 -5.5,6.5"
-            fill="#38bdf8"
-            stroke="#090d14"
-            strokeWidth="1.1"
+        <g transform={`translate(${playerCoords.x}, ${playerCoords.z}) scale(${k})`}>
+          <g transform={`rotate(${(-playerCoords.yaw * 180) / Math.PI})`}>
+            <polygon points="0,0 -18,-30 18,-30" fill="rgba(56,189,248,0.16)" />
+            <polygon
+              points="0,-8 5.5,6.5 0,3.2 -5.5,6.5"
+              fill="#38bdf8"
+              stroke="#090d14"
+              strokeWidth="1.1"
+            />
+          </g>
+          {currentBuilding && (
+            <g transform="translate(6, -6)">
+              <rect
+                x="-1"
+                y="-6"
+                width="14"
+                height="8"
+                rx="2"
+                fill="#0f172a"
+                stroke="#38bdf8"
+                strokeWidth="0.8"
+              />
+              <text
+                x="6"
+                y="-0.8"
+                textAnchor="middle"
+                fill="#38bdf8"
+                fontSize="5"
+                fontFamily="monospace"
+                fontWeight="bold"
+              >
+                {`L${currentFloor + 1}`}
+              </text>
+            </g>
+          )}
+        </g>
+      )}
+
+      {/* Building Floor Elevation HUD overlay on the map */}
+      {currentBuilding && (
+        <g transform={`translate(${view.x + 4 * k}, ${view.y + 7 * k})`}>
+          <rect
+            x="0"
+            y="-4.5"
+            width={compactMinimap ? 78 * k : 100 * k}
+            height={9 * k}
+            rx={2 * k}
+            fill="#090d14"
+            fillOpacity="0.94"
+            stroke="#38bdf8"
+            strokeWidth={0.7 * k}
           />
+          <text
+            x={3 * k}
+            y={1.8 * k}
+            fill="#38bdf8"
+            fontSize={3.8 * k}
+            fontFamily="monospace"
+            fontWeight="bold"
+          >
+            {`LEVEL ${currentFloor + 1} OF ${currentBuilding.floors} · ${currentBuilding.name.replace(" (Safehouse)", "").slice(0, 16)}`}
+          </text>
         </g>
       )}
     </svg>

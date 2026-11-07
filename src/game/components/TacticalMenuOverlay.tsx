@@ -55,7 +55,7 @@ interface TacticalMenuOverlayProps {
   techNodes: RetrofitTechNode[];
   salvageInventory: SalvageInventory;
   campaign: CampaignProgress;
-  playerCoords: { x: number; z: number; yaw: number };
+  playerCoords: { x: number; z: number; yaw: number; y?: number };
   vehicleCoords: { x: number; z: number };
   squadTargetCoords: { x: number; z: number } | null;
   convoyCoords: { x: number; z: number; intact: boolean };
@@ -92,13 +92,25 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
   onSetSquadOrder,
 }) => {
   const [subTab, setSubTab] = useState<PlayerMenuTab>("MAP_AND_MISSION");
-  const [activeTrack, setActiveTrack] = useState<SoundtrackId>(() => musicEngine.getActiveTrack());
+  const [activeTrack, setActiveTrack] = useState<SoundtrackId>(() => {
+    if (typeof musicEngine?.getActiveTrack === "function") {
+      return musicEngine.getActiveTrack();
+    }
+    if (typeof musicEngine?.getTrack === "function") {
+      return musicEngine.getTrack();
+    }
+    return "iron-crown-1";
+  });
   const [isMuted, setIsMuted] = useState<boolean>(() => musicEngine.isMuted());
   const [downloadingTrack, setDownloadingTrack] = useState<SoundtrackId | null>(null);
   const [downloadSuccess, setDownloadSuccess] = useState<SoundtrackId | null>(null);
 
   const handleSelectTrack = (trackId: SoundtrackId) => {
-    musicEngine.setActiveTrack(trackId);
+    if (typeof musicEngine?.setActiveTrack === "function") {
+      musicEngine.setActiveTrack(trackId);
+    } else if (typeof musicEngine?.setTrack === "function") {
+      musicEngine.setTrack(trackId);
+    }
     setActiveTrack(trackId);
   };
 
@@ -231,7 +243,7 @@ export const TacticalMenuOverlay: React.FC<TacticalMenuOverlayProps> = ({
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-400">
                 <span>Blue arrow: you · Green: squad APC · Red diamond: convoy</span>
-                <span>Amber: mission building · Green building: safehouse</span>
+                <span>Amber striped shaft: building stairwells · Elevation level badge</span>
               </div>
             </div>
 

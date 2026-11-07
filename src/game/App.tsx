@@ -109,11 +109,12 @@ export default function App() {
     y: number;
     nonce: number;
   } | null>(null);
-  const [livePlayerCoords, setLivePlayerCoords] = useState<{ x: number; z: number; yaw: number }>({
-    x: 0,
-    z: 0,
-    yaw: 0,
-  });
+  const [livePlayerCoords, setLivePlayerCoords] = useState<{
+    x: number;
+    z: number;
+    yaw: number;
+    y?: number;
+  }>({ x: 0, z: 0, yaw: 0, y: 0 });
   const [liveVehicleCoords, setLiveVehicleCoords] = useState<{ x: number; z: number }>({
     x: 0,
     z: 0,
@@ -575,7 +576,8 @@ export default function App() {
       setLivePlayerCoords((prev) =>
         Math.abs(prev.x - player.x) +
           Math.abs(prev.z - player.z) +
-          Math.abs(prev.yaw - player.yaw) >
+          Math.abs(prev.yaw - player.yaw) +
+          Math.abs((prev.y ?? 0) - (player.y ?? 0)) >
         0.05
           ? player
           : prev,

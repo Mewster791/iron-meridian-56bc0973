@@ -615,4 +615,64 @@ export const LORE_DOSSIERS: ReadonlyArray<{ id: string; title: string; text: str
     title: "Hale’s field notebook",
     text: "Meridian Six moves like they’ve done this before. Let’s hope they have.",
   },
+  {
+    id: "d13",
+    title: "Wiretap Transcript: The Double Siphon (Oct 14)",
+    text: "Consortium Operator: 'Western depot received forty pallets of AP rounds this morning. Ship forty pallets to the Eastern rail yard tonight. Keep the casualty rates symmetrical until the bonds mature.'",
+  },
+  {
+    id: "d14",
+    title: "Black Iron Armory Manifest #88",
+    text: "Ordnance inspection records reveal identical tungsten-carbide penetrators shipped in crates marked with forged coalition inspection stamps. Both sides were buying weapons forged in the same foundry.",
+  },
+  {
+    id: "d15",
+    title: "Civilian Radio Intercept: Kestrel FM",
+    text: "Emergency pirate broadcast: 'To anyone hiding in Sector 4: do not take Grand Avenue. The armored convoys fire on anything moving. Safehouses on Kestrel Row still have bread and fresh filters.'",
+  },
+  {
+    id: "d16",
+    title: "Director Varga’s Personal Comm: On Asymmetric Leverage",
+    text: "Varga: 'Victory is unprofitable. A decisive triumph ends the consumption of capital. Balance of attrition is the only sustainable business model in modern warfare.'",
+  },
+  {
+    id: "d17",
+    title: "Ashgrove Security Memo: Checkpoint Gamma",
+    text: "Strict order from Security Chief Bell: 'All civilian couriers carrying physical paper ledgers are to be shot on sight. No verbal warnings. The accounts must not leave the Tower vault.'",
+  },
+  {
+    id: "d18",
+    title: "The Meridian Transit Authority Blueprint",
+    text: "Architectural schematics from 1952: showing how Varos-Meridian's reinforced concrete stairwells and load-bearing cores were designed to survive heavy artillery bombardments as civilian fallout shelters.",
+  },
+  {
+    id: "d19",
+    title: "Field Medic’s Triage Note",
+    text: "Triage Surgeon Dr. Aris: 'Treated three East soldiers and two West operators in the same basement tonight. All five had shrapnel from the exact same batch of Consortium 82mm mortar shells.'",
+  },
+  {
+    id: "d20",
+    title: "The Gold Ledger Excerpt: Account 'Prometheus'",
+    text: "Escrow ledger entry: Account #881-Prometheus holds twelve metric tons of bullion, authorized to release payments to defense contractors only while the city remains designated an active combat zone.",
+  },
+  {
+    id: "d21",
+    title: "Syndicate Manifesto: The Iron Meridian",
+    text: "Partisan broadsheet: 'We were born between the borders. We will not be Eastern serfs or Western consumers. Every floor we hold, every stairwell we defend is sovereign ground.'",
+  },
+  {
+    id: "d22",
+    title: "Confession of Vault Engineer M. Kovacs",
+    text: "Recorded audio file: 'They forced me to wire the seismic triggers into the foundation pillars. If the Consortium loses the central bank, Varga intends to bring the entire block down with him.'",
+  },
+  {
+    id: "d23",
+    title: "Intercepted Eastern Pact Recon Cable",
+    text: "Recon Recon-9: 'The enemy isn't Western Coalition regulars. It's unmarked Ashgrove mercenaries wearing sanitized uniforms. Someone has orchestrated this war from the center of the city.'",
+  },
+  {
+    id: "d24",
+    title: "Hale's Declassified Dossier: The Cost of Neutrality",
+    text: "Hale: 'When this is over, they’ll write that Varos-Meridian fell because it had no allies. The truth is worse: it fell because everyone was its customer. We finish this today, or nobody leaves.'",
+  },
 ];

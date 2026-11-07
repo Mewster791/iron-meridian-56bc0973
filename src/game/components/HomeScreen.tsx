@@ -70,12 +70,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showControls, setShowControls] = useState<boolean>(false);
   const [faction, onSelectFaction] = useState<FactionId>(save?.faction ?? FactionId.EAST);
   const [confirmNew, setConfirmNew] = useState(false);
-  const [activeTrack, setActiveTrack] = useState<SoundtrackId>(() => musicEngine.getActiveTrack());
+  const [activeTrack, setActiveTrack] = useState<SoundtrackId>(() => {
+    if (typeof musicEngine?.getActiveTrack === "function") {
+      return musicEngine.getActiveTrack();
+    }
+    if (typeof musicEngine?.getTrack === "function") {
+      return musicEngine.getTrack();
+    }
+    return "iron-crown-1";
+  });
   const [downloadingTrack, setDownloadingTrack] = useState<SoundtrackId | null>(null);
   const [downloadSuccess, setDownloadSuccess] = useState<SoundtrackId | null>(null);
 
   const handleSelectTrack = (trackId: SoundtrackId) => {
-    musicEngine.setActiveTrack(trackId);
+    if (typeof musicEngine?.setActiveTrack === "function") {
+      musicEngine.setActiveTrack(trackId);
+    } else if (typeof musicEngine?.setTrack === "function") {
+      musicEngine.setTrack(trackId);
+    }
     setActiveTrack(trackId);
   };
 

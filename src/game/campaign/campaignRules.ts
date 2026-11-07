@@ -19,9 +19,9 @@ export interface CampaignProgress {
 export const APC_RESUPPLY_COOLDOWN_SEC = 180;
 /** Fraction of scrap alloy lost when the operator goes down. */
 export const DEATH_SCRAP_PENALTY = 0.2;
-/** Enemy toughness per act. */
-export const ENEMY_HP_BY_ACT: Record<1 | 2 | 3, number> = { 1: 120, 2: 150, 3: 185 };
-export const ENEMY_DAMAGE_BY_ACT: Record<1 | 2 | 3, number> = { 1: 10, 2: 12, 3: 14 };
+/** Enemy toughness per act: balanced for responsive, tactical firefights without bullet spongeyness */
+export const ENEMY_HP_BY_ACT: Record<1 | 2 | 3, number> = { 1: 95, 2: 120, 3: 145 };
+export const ENEMY_DAMAGE_BY_ACT: Record<1 | 2 | 3, number> = { 1: 8, 2: 10, 3: 12 };
 
 export function createInitialCampaignProgress(): CampaignProgress {
   return {

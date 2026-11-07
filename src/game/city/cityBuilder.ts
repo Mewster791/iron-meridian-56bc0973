@@ -410,6 +410,28 @@ export function buildCityScene(
         wbox.cz + wbox.sz / 2,
         col,
       );
+
+      // Floor-specific visual accent band on interior walls for immediate floor recognition
+      if (wbox.kind !== "EXTERIOR") {
+        const floorIdx = Math.max(0, Math.floor(wbox.y0 / FLOOR_HEIGHT));
+        const accentColors = [
+          new THREE.Color(0xd97706), // Level 1 Amber
+          new THREE.Color(0x0284c7), // Level 2 Cyan
+          new THREE.Color(0x059669), // Level 3 Emerald
+          new THREE.Color(0x7c3aed), // Level 4 Purple
+          new THREE.Color(0xdc2626), // Level 5 Crimson
+        ];
+        const aCol = accentColors[floorIdx % accentColors.length];
+        detail.add(
+          wbox.cx - wbox.sx / 2 - 0.005,
+          wbox.y0 + 1.15,
+          wbox.cz - wbox.sz / 2 - 0.005,
+          wbox.cx + wbox.sx / 2 + 0.005,
+          wbox.y0 + 1.25,
+          wbox.cz + wbox.sz / 2 + 0.005,
+          aCol,
+        );
+      }
       physics.addBox({
         id: `${b.id}-w`,
         cx: wbox.cx,
@@ -468,8 +490,8 @@ export function buildCityScene(
           minY: bot,
           maxY: top,
           material: "CONCRETE",
-          walkableTop: true,
-          stepUp: 0.65,
+          walkableTop: false,
+          stepUp: 0.28,
           group,
         });
       }
@@ -536,21 +558,71 @@ export function buildCityScene(
       }
     }
 
-    // Stair treads (collision is analytic in cityLayout.sampleCitySupport).
-    const steps = 12;
+    // High-visibility stair treads, contrasting nosing, safety threshold lines, and level placards
+    const steps = 14;
     const runZ = (b.core.maxZ - b.core.minZ) / steps;
+    const riserH = FLOOR_HEIGHT / steps;
+    const hazardStripeCol = new THREE.Color(0xf59e0b);
+    const nosingCol = new THREE.Color(0xfde68a);
+    const plaqueColors = [
+      new THREE.Color(0xf59e0b), // Level 1 Amber
+      new THREE.Color(0x38bdf8), // Level 2 Sky Blue
+      new THREE.Color(0x10b981), // Level 3 Emerald
+      new THREE.Color(0xa855f7), // Level 4 Purple
+      new THREE.Color(0xef4444), // Level 5 Crimson
+    ];
+
     for (let r = 0; r < b.floors - 1; r++) {
+      const landingY = floorY(r + 1);
+
+      // Floor landing threshold caution stripe at the top of the ramp
+      detail.add(
+        b.core.minX + 0.04,
+        landingY - 0.015,
+        b.core.maxZ - 0.16,
+        b.core.maxX - 0.04,
+        landingY + 0.015,
+        b.core.maxZ + 0.16,
+        hazardStripeCol,
+      );
+
+      // Distinct illuminated floor level placard on the landing wall
+      const plaqueY = landingY + 1.35;
+      const pCol = plaqueColors[(r + 1) % plaqueColors.length];
+      detail.add(
+        b.core.maxX - 0.06,
+        plaqueY - 0.32,
+        b.core.maxZ - 0.42,
+        b.core.maxX + 0.02,
+        plaqueY + 0.32,
+        b.core.maxZ + 0.42,
+        new THREE.Color(0x0f172a),
+      );
+      detail.add(
+        b.core.maxX - 0.04,
+        plaqueY - 0.2,
+        b.core.maxZ - 0.32,
+        b.core.maxX + 0.04,
+        plaqueY + 0.2,
+        b.core.maxZ + 0.32,
+        pCol,
+      );
+
       for (let k = 0; k < steps; k++) {
         const z0 = b.core.minZ + k * runZ;
-        const yTop = floorY(r) + ((k + 0.5) / steps) * FLOOR_HEIGHT;
+        const z1 = z0 + runZ;
+        const yTop = floorY(r) + ((k + 1) / steps) * FLOOR_HEIGHT;
+        // Step tread body
+        detail.add(b.core.minX + 0.02, yTop - riserH, z0, b.core.maxX - 0.02, yTop, z1, stepCol);
+        // High-contrast front nosing lip gives immediate visual depth and motion feedback
         detail.add(
-          b.core.minX + 0.02,
-          yTop - 0.2,
-          z0,
-          b.core.maxX - 0.02,
-          yTop,
-          z0 + runZ,
-          stepCol,
+          b.core.minX + 0.03,
+          yTop - 0.035,
+          z1 - 0.04,
+          b.core.maxX - 0.03,
+          yTop + 0.01,
+          z1 + 0.02,
+          nosingCol,
         );
       }
     }
